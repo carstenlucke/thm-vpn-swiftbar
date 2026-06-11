@@ -185,8 +185,8 @@ das eine Automations-Freigabe für Terminal.app benötigen würde.
 **Trennen-Knopf** (`thmvpn-disconnect.sh`): `openconnect` läuft als `root` (per `sudo` gestartet),
 ein SwiftBar-Plugin dagegen als normaler Benutzer und darf den Prozess nicht beenden. Der Helfer
 nutzt daher `osascript … with administrator privileges` – das öffnet den **nativen
-macOS-Passwortdialog** (kein dauerhafter Eingriff in `sudoers`) und beendet openconnect per
-`SIGINT`. `SIGINT` ist wichtig: openconnect räumt dann sauber auf und das `vpnc-script` setzt
+macOS-Authentifizierungsdialog** (Touch ID oder Passwort, kein dauerhafter Eingriff in `sudoers`)
+und beendet openconnect per `SIGINT`. `SIGINT` ist wichtig: openconnect räumt dann sauber auf und das `vpnc-script` setzt
 Routen und DNS zurück (so, als hätte man im Terminal `Strg-C` gedrückt). Liegt der optionale
 `sudoers`-Eintrag (siehe unten) vor, nutzt der Helfer stattdessen passwortloses `sudo` und der
 Dialog entfällt.
@@ -195,10 +195,12 @@ Dialog entfällt.
 
 ## Optional: Trennen ohne Passwortdialog
 
-Standardmäßig öffnet der „VPN trennen"-Knopf einen nativen macOS-Passwortdialog. Wer den
-loswerden will, kann einen eng begrenzten `sudoers`-Eintrag anlegen. **Sicherheitsabwägung:**
-Damit darf der eigene Benutzer openconnect ohne Passwort beenden – das ist unkritisch (nur ein
-gezieltes Signal an einen Prozess), aber eine bewusste Änderung an der Systemkonfiguration.
+Standardmäßig öffnet der „VPN trennen"-Knopf einen nativen macOS-Authentifizierungsdialog – auf
+einem Mac mit **Touch ID genügt dort der Fingerabdruck** (ohne weitere Einrichtung). Wer auch
+diese Bestätigung noch loswerden, also komplett bestätigungsfrei trennen will, kann einen eng
+begrenzten `sudoers`-Eintrag anlegen. **Sicherheitsabwägung:** Damit darf der eigene Benutzer
+openconnect ohne Passwort beenden – das ist unkritisch (nur ein gezieltes Signal an einen
+Prozess), aber eine bewusste Änderung an der Systemkonfiguration.
 
 `thmvpn-disconnect.sh` erkennt den Eintrag **automatisch**: Liegt
 `/etc/sudoers.d/openconnect-disconnect` vor, wird passwortlos getrennt; sonst erscheint weiterhin
