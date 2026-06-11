@@ -184,27 +184,32 @@ das eine Automations-Freigabe für Terminal.app benötigen würde.
 
 **Trennen-Knopf** (`thmvpn-disconnect.sh`): `openconnect` läuft als `root` (per `sudo` gestartet),
 ein SwiftBar-Plugin dagegen als normaler Benutzer und darf den Prozess nicht beenden. Der Helfer
-nutzt daher `osascript … with administrator privileges` – das öffnet den **nativen
-macOS-Authentifizierungsdialog** (Touch ID oder Passwort, kein dauerhafter Eingriff in `sudoers`)
-und beendet openconnect per `SIGINT`. `SIGINT` ist wichtig: openconnect räumt dann sauber auf und das `vpnc-script` setzt
-Routen und DNS zurück (so, als hätte man im Terminal `Strg-C` gedrückt). Liegt der optionale
-`sudoers`-Eintrag (siehe unten) vor, nutzt der Helfer stattdessen passwortloses `sudo` und der
-Dialog entfällt.
+beendet es per `SIGINT` (wichtig: openconnect räumt dann sauber auf, das `vpnc-script` setzt
+Routen und DNS zurück – wie `Strg-C` im Terminal) und wählt den Weg zur nötigen Root-Berechtigung
+automatisch:
+
+- **`sudoers`-Eintrag vorhanden** (siehe unten) → passwortlos, ohne Dialog und ohne Fenster.
+- **Touch ID für `sudo` aktiv** → da `sudo`/Touch ID ein TTY brauchen, startet sich das Skript per
+  `open -a Terminal` in einem Fenster neu (`[ ! -t 0 ]`) und beendet openconnect dort per `sudo`
+  (Touch ID). Direktes `sudo` aus dem SwiftBar-Hintergrund scheitert, weil ohne Terminal kein
+  Touch-ID-/Passwort-Prompt möglich ist.
+- **sonst** → nativer macOS-Admin-Dialog (`osascript … with administrator privileges`, Passwort).
 
 ---
 
 ## Optional: Trennen ohne Passwortdialog
 
-Standardmäßig öffnet der „VPN trennen"-Knopf einen nativen macOS-Authentifizierungsdialog – auf
-einem Mac mit **Touch ID genügt dort der Fingerabdruck** (ohne weitere Einrichtung). Wer auch
-diese Bestätigung noch loswerden, also komplett bestätigungsfrei trennen will, kann einen eng
-begrenzten `sudoers`-Eintrag anlegen. **Sicherheitsabwägung:** Damit darf der eigene Benutzer
-openconnect ohne Passwort beenden – das ist unkritisch (nur ein gezieltes Signal an einen
-Prozess), aber eine bewusste Änderung an der Systemkonfiguration.
+Beim Trennen verlangt openconnect (als `root`) eine Bestätigung: Ist **Touch ID für `sudo`** aktiv
+(siehe oben), öffnet der „VPN trennen"-Knopf kurz ein Terminal-Fenster und du bestätigst per
+Fingerabdruck; ohne Touch ID erscheint ein Passwortdialog. Wer auch das noch loswerden, also
+komplett bestätigungsfrei **und ohne Fenster** trennen will, kann einen eng begrenzten
+`sudoers`-Eintrag anlegen. **Sicherheitsabwägung:** Damit darf der eigene Benutzer openconnect
+ohne Passwort beenden – das ist unkritisch (nur ein gezieltes Signal an einen Prozess), aber eine
+bewusste Änderung an der Systemkonfiguration.
 
 `thmvpn-disconnect.sh` erkennt den Eintrag **automatisch**: Liegt
-`/etc/sudoers.d/openconnect-disconnect` vor, wird passwortlos getrennt; sonst erscheint weiterhin
-der Dialog. Ein manuelles Editieren des Skripts ist also nicht nötig.
+`/etc/sudoers.d/openconnect-disconnect` vor, wird passwortlos getrennt – das hat Vorrang vor dem
+Touch-ID-/Dialog-Weg. Ein manuelles Editieren des Skripts ist also nicht nötig.
 
 Am einfachsten beim Setup: `install.sh` fragt am Ende, ob der Eintrag angelegt werden soll.
 Manuell geht es so:
