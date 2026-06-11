@@ -39,7 +39,7 @@ brew install openconnect
 sudo openconnect --protocol=anyconnect --user=<rz-kennung> vpn.thm.de
 ```
 
-`<rz-kennung>` durch die eigene THM-Kennung ersetzen (z. B. `clucke`). Der Befehl fragt
+`<rz-kennung>` durch die eigene THM-Kennung ersetzen (z. B. `johndoe`). Der Befehl fragt
 interaktiv nach dem macOS-`sudo`-Passwort und anschließend nach dem VPN-Passwort (ggf. zweiter
 Faktor). Der Tunnel bleibt **im Vordergrund** geöffnet – zum Trennen `Strg-C` drücken.
 
