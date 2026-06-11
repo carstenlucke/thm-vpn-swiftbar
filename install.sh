@@ -33,6 +33,35 @@ echo "==> SwiftBar starten / neu laden"
 open -a SwiftBar
 open "swiftbar://refreshallplugins" >/dev/null 2>&1 || true
 
+echo "==> Optional: Trennen ohne Passwortdialog"
+SUDOERS_FILE="/etc/sudoers.d/openconnect-disconnect"
+if [ -f "$SUDOERS_FILE" ]; then
+  echo "    sudoers-Eintrag bereits vorhanden -> uebersprungen ($SUDOERS_FILE)."
+else
+  echo "    Damit der 'VPN trennen'-Knopf openconnect ohne Passwortdialog beenden kann,"
+  echo "    laesst sich ein eng begrenzter sudoers-Eintrag anlegen:"
+  echo "      $(whoami) ALL=(root) NOPASSWD: /usr/bin/pkill -INT openconnect"
+  echo "    (Nur ein gezieltes Signal an openconnect - keine weiteren Rechte.)"
+  printf "    Jetzt anlegen? Erfordert dein sudo-Passwort. [j/N] "
+  read -r ANSWER || ANSWER=""
+  case "$ANSWER" in
+    j|J|y|Y)
+      TMP_SUDOERS="$(mktemp)"
+      echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/pkill -INT openconnect" > "$TMP_SUDOERS"
+      if sudo visudo -cf "$TMP_SUDOERS" >/dev/null 2>&1; then
+        sudo install -m 440 -o root -g wheel "$TMP_SUDOERS" "$SUDOERS_FILE"
+        echo "    Angelegt: $SUDOERS_FILE"
+      else
+        echo "    FEHLER: sudoers-Syntaxpruefung fehlgeschlagen - nichts geaendert." >&2
+      fi
+      rm -f "$TMP_SUDOERS"
+      ;;
+    *)
+      echo "    Uebersprungen. (Standard: nativer Passwortdialog beim Trennen.)"
+      ;;
+  esac
+fi
+
 echo
 echo "Fertig. In der Menueleiste erscheint:"
 echo "  🔒 THM  - VPN verbunden (mit 'VPN trennen' im Dropdown)"

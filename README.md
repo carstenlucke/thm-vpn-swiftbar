@@ -139,28 +139,31 @@ ein SwiftBar-Plugin dagegen als normaler Benutzer und darf den Prozess nicht bee
 nutzt daher `osascript … with administrator privileges` – das öffnet den **nativen
 macOS-Passwortdialog** (kein dauerhafter Eingriff in `sudoers`) und beendet openconnect per
 `SIGINT`. `SIGINT` ist wichtig: openconnect räumt dann sauber auf und das `vpnc-script` setzt
-Routen und DNS zurück (so, als hätte man im Terminal `Strg-C` gedrückt).
+Routen und DNS zurück (so, als hätte man im Terminal `Strg-C` gedrückt). Liegt der optionale
+`sudoers`-Eintrag (siehe unten) vor, nutzt der Helfer stattdessen passwortloses `sudo` und der
+Dialog entfällt.
 
 ---
 
 ## Optional: Trennen ohne Passwortdialog
 
-Wer den Passwortdialog beim Trennen loswerden will, kann einen eng begrenzten `sudoers`-Eintrag
-anlegen. **Sicherheitsabwägung:** Damit darf der eigene Benutzer openconnect ohne Passwort
-beenden – das ist unkritisch (nur ein gezieltes Signal an einen Prozess), aber eine bewusste
-Änderung an der Systemkonfiguration.
+Standardmäßig öffnet der „VPN trennen"-Knopf einen nativen macOS-Passwortdialog. Wer den
+loswerden will, kann einen eng begrenzten `sudoers`-Eintrag anlegen. **Sicherheitsabwägung:**
+Damit darf der eigene Benutzer openconnect ohne Passwort beenden – das ist unkritisch (nur ein
+gezieltes Signal an einen Prozess), aber eine bewusste Änderung an der Systemkonfiguration.
+
+`thmvpn-disconnect.sh` erkennt den Eintrag **automatisch**: Liegt
+`/etc/sudoers.d/openconnect-disconnect` vor, wird passwortlos getrennt; sonst erscheint weiterhin
+der Dialog. Ein manuelles Editieren des Skripts ist also nicht nötig.
+
+Am einfachsten beim Setup: `install.sh` fragt am Ende, ob der Eintrag angelegt werden soll.
+Manuell geht es so:
 
 ```bash
 # Datei sicher mit visudo anlegen (Syntaxprüfung):
 echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/pkill -INT openconnect" | \
   sudo tee /etc/sudoers.d/openconnect-disconnect
 sudo chmod 440 /etc/sudoers.d/openconnect-disconnect
-```
-
-Anschließend in `thmvpn-disconnect.sh` die `osascript`-Zeile ersetzen durch:
-
-```bash
-/usr/bin/sudo /usr/bin/pkill -INT openconnect
 ```
 
 ---
