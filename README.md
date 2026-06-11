@@ -7,7 +7,7 @@ AnyConnect – plus eine kleine **Statusanzeige in der macOS-Menüleiste** über
 
 ```
 🔒 THM      ← verbunden (Dropdown zeigt Tunnel-IP + "VPN trennen")
-🔓          ← getrennt
+🔓          ← getrennt (Dropdown zeigt "VPN verbinden")
 ```
 
 Getestet auf macOS (Apple Silicon) mit openconnect 9.12 und SwiftBar 2.0.
@@ -101,7 +101,8 @@ cd thm-vpn-swiftbar
 ```
 
 `install.sh` installiert bei Bedarf `openconnect` und `SwiftBar` via Homebrew, kopiert die
-beiden Skripte nach `~/.config/swiftbar/`, setzt den SwiftBar-Plugin-Ordner und startet SwiftBar.
+Skripte und eine Konfig-Vorlage nach `~/.config/swiftbar/`, setzt den SwiftBar-Plugin-Ordner und
+startet SwiftBar.
 
 ### Manuelle Installation
 
@@ -113,7 +114,13 @@ brew install --cask swiftbar
 mkdir -p ~/.config/swiftbar/plugins
 cp plugins/thmvpn.10s.sh   ~/.config/swiftbar/plugins/
 cp thmvpn-disconnect.sh    ~/.config/swiftbar/
-chmod +x ~/.config/swiftbar/plugins/thmvpn.10s.sh ~/.config/swiftbar/thmvpn-disconnect.sh
+cp thmvpn-connect.sh       ~/.config/swiftbar/
+chmod +x ~/.config/swiftbar/plugins/thmvpn.10s.sh \
+         ~/.config/swiftbar/thmvpn-disconnect.sh \
+         ~/.config/swiftbar/thmvpn-connect.sh
+
+# Konfig-Vorlage anlegen (RZ-Kennung dort eintragen)
+cp thmvpn.conf.example     ~/.config/swiftbar/thmvpn.conf
 
 # SwiftBar den Plugin-Ordner mitteilen und starten
 defaults write com.ameba.SwiftBar PluginDirectory -string "$HOME/.config/swiftbar/plugins"
@@ -126,6 +133,40 @@ Damit das Symbol nach einem Neustart automatisch erscheint: im SwiftBar-Menü �
 *Preferences* → **„Launch at Login"** aktivieren (in SwiftBar 2 nur über die App selbst möglich,
 nicht per Kommandozeile).
 
+### Verbinden per Menü
+
+Im getrennten Zustand bietet das Dropdown **„VPN verbinden"**. Da `openconnect` interaktiv nach
+sudo- und VPN-Passwort (und ggf. zweitem Faktor) fragt und im Vordergrund laufen muss, öffnet
+dieser Menüpunkt ein **Terminal-Fenster** und startet dort `openconnect`. Passwörter eingeben –
+das Symbol springt nach spätestens 10 s auf 🔒. Zum Trennen `Strg-C` im Fenster oder den
+Menüpunkt „VPN trennen".
+
+Die RZ-Kennung (und optional Gateway/Gruppe) liest `thmvpn-connect.sh` aus
+`~/.config/swiftbar/thmvpn.conf`:
+
+```bash
+THM_USER=<rz-kennung>     # weglassen -> openconnect fragt interaktiv nach dem Benutzernamen
+#THM_HOST=vpn.thm.de      # Standard
+#THM_AUTHGROUP=<gruppe>   # nur falls beim Login eine Gruppe gewählt werden muss
+```
+
+#### Nur das VPN-Kennwort tippen: Touch ID für `sudo`
+
+`openconnect` braucht `root`, fragt also zuerst nach dem `sudo`-Passwort und danach nach dem
+VPN-Kennwort. Wer sich das `sudo`-Passwort sparen will, aktiviert **Touch ID für `sudo`** – dann
+genügt der Fingerabdruck und es bleibt nur das VPN-Kennwort zum Tippen:
+
+```bash
+# Update-fest über sudo_local (überschreibt keine System-Datei):
+sudo sh -c "sed 's/^#auth/auth/' /etc/pam.d/sudo_local.template > /etc/pam.d/sudo_local"
+```
+
+> **Warum nicht `sudo openconnect` per `sudoers` freigeben?** Anders als beim Trennen
+> (`/usr/bin/pkill`, SIP-geschützt) liegt die `openconnect`-Binary unter Homebrew in einem
+> **dir gehörenden** Verzeichnis und lässt sich per `--script` zum Ausführen beliebigen Codes
+> bewegen. Eine `NOPASSWD`-Regel darauf käme faktisch passwortlosem `root` gleich – Touch ID ist
+> der sichere Weg zum selben Komfort.
+
 ---
 
 ## Wie funktioniert es?
@@ -133,6 +174,13 @@ nicht per Kommandozeile).
 **Statuserkennung** (`plugins/thmvpn.10s.sh`): Das Plugin prüft alle 10 Sekunden, ob eine
 `utun`-Schnittstelle eine Adresse aus dem THM-VPN-Pool `10.196.x` trägt. Das Refresh-Intervall
 steckt im Dateinamen (`…10s.sh`) – für 5 Sekunden einfach in `thmvpn.5s.sh` umbenennen.
+
+**Verbinden-Knopf** (`thmvpn-connect.sh`): Da der Verbindungsaufbau interaktiv ist und
+`openconnect` im Vordergrund laufen muss, lässt sich das nicht geräuschlos im Hintergrund
+erledigen. SwiftBar startet das Skript im Hintergrund; erkennt es, dass es ohne Terminal läuft
+(`[ ! -t 0 ]`), startet es sich per `open -a Terminal` selbst in einem Fenster neu und ruft dort
+`openconnect` mit den Werten aus `thmvpn.conf` auf. Das ist robuster als SwiftBars `terminal=true`,
+das eine Automations-Freigabe für Terminal.app benötigen würde.
 
 **Trennen-Knopf** (`thmvpn-disconnect.sh`): `openconnect` läuft als `root` (per `sudo` gestartet),
 ein SwiftBar-Plugin dagegen als normaler Benutzer und darf den Prozess nicht beenden. Der Helfer
@@ -171,11 +219,15 @@ sudo chmod 440 /etc/sudoers.d/openconnect-disconnect
 ## Deinstallation
 
 ```bash
-rm -f ~/.config/swiftbar/plugins/thmvpn.10s.sh ~/.config/swiftbar/thmvpn-disconnect.sh
+rm -f ~/.config/swiftbar/plugins/thmvpn.10s.sh \
+      ~/.config/swiftbar/thmvpn-disconnect.sh \
+      ~/.config/swiftbar/thmvpn-connect.sh \
+      ~/.config/swiftbar/thmvpn.conf
 # optional:
 brew uninstall --cask swiftbar
 brew uninstall openconnect
 sudo rm -f /etc/sudoers.d/openconnect-disconnect   # falls angelegt
+sudo rm -f /etc/pam.d/sudo_local                   # nur falls ausschließlich für Touch ID hier angelegt
 ```
 
 ---
@@ -184,6 +236,8 @@ sudo rm -f /etc/sudoers.d/openconnect-disconnect   # falls angelegt
 
 | Datei | Zweck |
 |-------|-------|
-| `plugins/thmvpn.10s.sh` | SwiftBar-Plugin: zeigt Status + Trennen-Knopf, Refresh alle 10 s |
+| `plugins/thmvpn.10s.sh` | SwiftBar-Plugin: zeigt Status + Verbinden-/Trennen-Knopf, Refresh alle 10 s |
+| `thmvpn-connect.sh`     | Helfer: startet openconnect in einem Terminal (liest `thmvpn.conf`) |
 | `thmvpn-disconnect.sh`  | Helfer: beendet openconnect sauber (per Admin-Dialog) |
+| `thmvpn.conf.example`   | Vorlage für die Konfiguration (RZ-Kennung, Gateway, Gruppe) |
 | `install.sh`            | Einrichtung in einem Schritt |

@@ -1,0 +1,14 @@
+# Konfiguration fuer die THM-VPN-Statusanzeige.
+# Nach ~/.config/swiftbar/thmvpn.conf kopieren und anpassen.
+# Wird von thmvpn-connect.sh eingelesen (per source), daher KEY=VALUE-Syntax.
+
+# RZ-Kennung fuer --user. Auskommentiert/leer lassen -> openconnect fragt
+# beim Verbinden interaktiv nach dem Benutzernamen.
+#THM_USER=johndoe
+
+# VPN-Gateway (Standard: vpn.thm.de).
+#THM_HOST=vpn.thm.de
+
+# Nur setzen, falls beim Login eine Gruppe gewaehlt werden muss
+# (entspricht dem Dropdown im Cisco-Client).
+#THM_AUTHGROUP=

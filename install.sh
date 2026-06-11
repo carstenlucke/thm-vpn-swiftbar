@@ -24,7 +24,16 @@ echo "==> Skripte installieren nach $SWIFTBAR_DIR"
 mkdir -p "$PLUGIN_DIR"
 cp "$REPO_DIR/plugins/thmvpn.10s.sh" "$PLUGIN_DIR/thmvpn.10s.sh"
 cp "$REPO_DIR/thmvpn-disconnect.sh" "$SWIFTBAR_DIR/thmvpn-disconnect.sh"
-chmod +x "$PLUGIN_DIR/thmvpn.10s.sh" "$SWIFTBAR_DIR/thmvpn-disconnect.sh"
+cp "$REPO_DIR/thmvpn-connect.sh"    "$SWIFTBAR_DIR/thmvpn-connect.sh"
+chmod +x "$PLUGIN_DIR/thmvpn.10s.sh" "$SWIFTBAR_DIR/thmvpn-disconnect.sh" "$SWIFTBAR_DIR/thmvpn-connect.sh"
+
+# Config-Vorlage anlegen, vorhandene Konfiguration nicht ueberschreiben
+if [ ! -f "$SWIFTBAR_DIR/thmvpn.conf" ]; then
+  cp "$REPO_DIR/thmvpn.conf.example" "$SWIFTBAR_DIR/thmvpn.conf"
+  echo "    Konfigvorlage angelegt: $SWIFTBAR_DIR/thmvpn.conf (RZ-Kennung dort eintragen)"
+else
+  echo "    Bestehende Konfiguration beibehalten: $SWIFTBAR_DIR/thmvpn.conf"
+fi
 
 echo "==> SwiftBar-Plugin-Ordner setzen"
 defaults write com.ameba.SwiftBar PluginDirectory -string "$PLUGIN_DIR"
@@ -65,6 +74,7 @@ fi
 echo
 echo "Fertig. In der Menueleiste erscheint:"
 echo "  🔒 THM  - VPN verbunden (mit 'VPN trennen' im Dropdown)"
-echo "  🔓      - VPN getrennt"
+echo "  🔓      - VPN getrennt  (mit 'VPN verbinden' im Dropdown)"
 echo
-echo "Verbinden:  sudo openconnect --protocol=anyconnect --user=<rz-kennung> vpn.thm.de"
+echo "Verbinden geht jetzt per Menue ('VPN verbinden' oeffnet ein Terminal)"
+echo "oder manuell:  sudo openconnect --protocol=anyconnect --user=<rz-kennung> vpn.thm.de"

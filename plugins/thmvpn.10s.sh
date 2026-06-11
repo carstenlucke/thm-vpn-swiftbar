@@ -1,13 +1,14 @@
 #!/bin/bash
 # <xbar.title>THM VPN Status</xbar.title>
-# <xbar.version>v1.1</xbar.version>
+# <xbar.version>v1.2</xbar.version>
 # <xbar.author>Carsten Lucke</xbar.author>
-# <xbar.desc>Zeigt in der Menueleiste an, ob openconnect mit dem THM-VPN (Netz 10.196.x) verbunden ist, inkl. Trennen-Knopf.</xbar.desc>
+# <xbar.desc>Zeigt in der Menueleiste an, ob openconnect mit dem THM-VPN (Netz 10.196.x) verbunden ist, inkl. Verbinden- und Trennen-Knopf.</xbar.desc>
 #
 # Der Dateiname steuert das Refresh-Intervall: thmvpn.10s.sh = alle 10 Sekunden.
 # Liegt nach der Installation in ~/.config/swiftbar/plugins/
 
 DISCONNECT="$HOME/.config/swiftbar/thmvpn-disconnect.sh"
+CONNECT="$HOME/.config/swiftbar/thmvpn-connect.sh"
 
 if /sbin/ifconfig | grep -q "inet 10.196"; then
   IP=$(/sbin/ifconfig | awk '/inet 10.196/ {print $2; exit}')
@@ -21,4 +22,6 @@ else
   echo "🔓"
   echo "---"
   echo "VPN getrennt | color=#888888"
+  echo "---"
+  echo "VPN verbinden | shell=\"$CONNECT\" terminal=false refresh=true color=#2da44e"
 fi
