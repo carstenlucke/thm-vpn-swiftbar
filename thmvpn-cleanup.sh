@@ -9,6 +9,9 @@
 #     (State:/Network/Service/utunN/...) -> Namensaufloesung ueber die
 #        THM-Nameserver, die ohne Tunnel nicht erreichbar sind
 #   - die per networksetup am aktiven Netzwerkdienst gesetzten THM-Nameserver
+#   - im Full-Tunnel die allgemeine Default-Route: das vpnc-script ersetzt sie
+#     durch eine Route ueber den Tunnel, die mit dem utun-Interface verschwindet
+#     -> kein Internet; das alte Gateway steht in /var/run/vpnc/defaultroute.<pid>
 #
 # Aufruf:
 #   thmvpn-cleanup.sh --check    nur pruefen (ohne Rechte); gibt je Altlast
@@ -37,6 +40,11 @@ gateway_ips() {
 # eine Altlast, auch nicht dessen Host-Route zum Gateway.
 vpn_active() {
   /usr/bin/pgrep -q -x openconnect || /sbin/ifconfig | /usr/bin/grep -q 'inet 10\.196\.'
+}
+
+# Einzelwert (z.B. Router) aus einem SystemConfiguration-Key.
+sc_value() {
+  printf 'show %s\n' "$1" | /usr/sbin/scutil | /usr/bin/awk -v k="$2" '$1 == k {print $3; exit}'
 }
 
 # Werte eines Arrays (z.B. ServerAddresses) aus einem SystemConfiguration-Key.
@@ -86,12 +94,49 @@ find_stale_routes() {
   return 0
 }
 
-# Gibt je Altlast eine Zeile "route <ip>" bzw. "dns <utunN>" aus.
+# Gibt es eine allgemeine (nicht an ein Interface gebundene, Flag I) Default-Route?
+has_default_route() {
+  /usr/sbin/netstat -rn -f inet | /usr/bin/awk '$1 == "default" && $3 !~ /I/ {f = 1} END {exit !f}'
+}
+
+# Dateien des vpnc-script (defaultroute.<pid>, resolv.conf-backup.<pid> ...),
+# deren Prozess nicht mehr laeuft.
+stale_vpnc_files() {
+  local f pid
+  for f in /var/run/vpnc/*.[0-9]*; do
+    [ -f "$f" ] || continue
+    pid=${f##*.}
+    [[ "$pid" =~ ^[0-9]+$ ]] || continue
+    /bin/ps -p "$pid" >/dev/null 2>&1 && continue
+    echo "$f"
+  done
+}
+
+# Zeile "default <gw>", wenn die allgemeine Default-Route fehlt und eine
+# verwaiste defaultroute-Datei zeigt, dass das vpnc-script sie ersetzt hatte
+# (ohne diese Datei ist man schlicht offline - kein Fall fuers Aufraeumen).
+find_stale_default() {
+  has_default_route && return 0
+  local f gw
+  for f in $(stale_vpnc_files); do
+    case "$f" in
+      */defaultroute.*)
+        gw=$(/usr/bin/head -n 1 "$f")
+        echo "default ${gw:-?}"
+        return 0
+        ;;
+    esac
+  done
+  return 0
+}
+
+# Gibt je Altlast eine Zeile "default <gw>", "route <ip>" bzw. "dns <utunN>" aus.
 # Solange ein alter THM-DNS-Eintrag existiert, laeuft die Aufloesung von
 # vpn.thm.de ins Leere (THM-Nameserver ohne Tunnel unerreichbar) - dann
 # wird die Route nicht geprueft; cleanup() holt das nach Entfernen des DNS nach.
 find_stale() {
   vpn_active && return
+  find_stale_default
   local dns
   dns=$(find_stale_dns)
   if [ -n "$dns" ]; then
@@ -117,12 +162,45 @@ reset_service_dns() {
              | /usr/bin/sed 's/^\*//')
 }
 
+# Liegt ein Gateway direkt im lokalen Netz eines physischen Interfaces?
+# (route get liefert dann keine gateway-Zeile.) Schuetzt davor, nach einem
+# Netzwechsel ein Gateway einzutragen, das es hier nicht gibt.
+gateway_on_link() {
+  local out
+  [[ "$1" =~ ^[0-9]+(\.[0-9]+){3}$ ]] || return 1
+  out=$(/sbin/route -n get "$1" 2>/dev/null) || return 1
+  echo "$out" | /usr/bin/grep -q 'gateway:' && return 1
+  echo "$out" | /usr/bin/grep -qE 'interface: (en|bridge)[0-9]+'
+}
+
+# Stellt die allgemeine Default-Route wieder her. Meist erledigt das macOS
+# selbst, sobald der Tunnel-Key mit OverridePrimary entfernt ist; sonst wird
+# der aktuelle Router des primaeren Dienstes eingetragen, ersatzweise das vom
+# vpnc-script gesicherte Gateway - jeweils nur, wenn es direkt erreichbar ist.
+restore_default_route() {
+  local saved="$1" gw
+  for _ in 0 1 2 3; do
+    [ "$_" -gt 0 ] && sleep 1
+    has_default_route && { echo "    Default-Route von macOS wiederhergestellt"; return 0; }
+  done
+  for gw in "$(sc_value State:/Network/Global/IPv4 Router)" "$saved"; do
+    gateway_on_link "$gw" || continue
+    echo "    Setze Default-Route ueber $gw"
+    /sbin/route -n add default "$gw" >/dev/null && return 0
+  done
+  echo "    Keine Default-Route - WLAN bzw. Netzwerk einmal aus- und wieder einschalten."
+  return 1
+}
+
 cleanup() {
-  local kind what n=0
+  local kind what n=0 default
   if vpn_active; then
     echo "==> VPN ist noch aktiv - nichts angefasst."
     return
   fi
+  # Vorher festhalten: Nach Entfernen des Tunnel-Keys setzt macOS die
+  # Default-Route meist sofort selbst.
+  default=$(find_stale_default)
   # Erst DNS entfernen, damit danach das Gateway wieder aufgeloest werden kann.
   while read -r kind what; do
     [[ "$what" =~ ^utun[0-9]+$ ]] || continue
@@ -134,6 +212,16 @@ cleanup() {
   if [ "$n" -gt 0 ]; then
     /usr/bin/dscacheutil -flushcache
     /usr/bin/killall -HUP mDNSResponder 2>/dev/null
+  fi
+  # Default-Route vor der Gateway-Aufloesung: ohne sie ist kein Nameserver erreichbar.
+  if [ -n "$default" ]; then
+    restore_default_route "${default#default }" && n=$((n + 1))
+  fi
+  for what in $(stale_vpnc_files); do
+    echo "    Entferne $what"
+    /bin/rm -f -- "$what"
+  done
+  if [ "$n" -gt 0 ]; then
     # mDNSResponder uebernimmt die neue Resolver-Konfiguration asynchron:
     # Gibt es eine Kandidaten-Route, kurz warten, bis das Gateway aufloest.
     if [ -n "$(static_host_routes)" ]; then

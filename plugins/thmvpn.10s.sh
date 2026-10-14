@@ -20,12 +20,13 @@ if /sbin/ifconfig | grep -q "inet 10.196"; then
   echo "---"
   echo "VPN trennen | shell=\"$DISCONNECT\" terminal=false refresh=true color=#cf222e"
 else
-  # Health-Check: Reste einer nicht sauber beendeten Sitzung (Route, DNS)?
-  # Das Warnsymbol nur bei DNS-Resten: Sie stoeren auch ohne VPN (thm.de-Namen
-  # loesen nicht auf). Eine alte Route stoert nur beim Verbinden, und
+  # Health-Check: Reste einer nicht sauber beendeten Sitzung (Route, DNS,
+  # Default-Route)? Das Warnsymbol nur bei Resten, die auch ohne VPN stoeren:
+  # DNS (thm.de-Namen loesen nicht auf) und fehlende Default-Route (kein
+  # Internet). Eine alte Gateway-Route stoert nur beim Verbinden, und
   # "VPN verbinden" raeumt sie ohnehin vorher weg.
   STALE=$("$CLEANUP" --check 2>/dev/null)
-  if echo "$STALE" | grep -q '^dns '; then
+  if echo "$STALE" | grep -qE '^(dns|default) '; then
     echo "🔓⚠️"
   else
     echo "🔓"
@@ -39,6 +40,7 @@ else
       case "$KIND" in
         route) echo "Alte Route zu $WHAT (wird beim Verbinden entfernt) | font=Menlo size=12" ;;
         dns)   echo "Alter THM-DNS auf $WHAT | font=Menlo size=12" ;;
+        default) echo "Default-Route fehlt (vorher über $WHAT) | font=Menlo size=12" ;;
       esac
     done
     echo "Aufräumen | shell=\"$CLEANUP\" terminal=false refresh=true color=#bf8700"

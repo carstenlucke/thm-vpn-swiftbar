@@ -186,11 +186,23 @@ Endet openconnect nicht sauber (Absturz, Ruhezustand, WLAN-Wechsel, `kill -9`), 
   werden dann weiter bei den THM-Nameservern angefragt, die ohne Tunnel nicht erreichbar sind.
   Das `vpnc-script` trägt die THM-Nameserver außerdem per `networksetup -setdnsservers` dauerhaft
   am aktiven Netzwerkdienst (z. B. WLAN) ein; das Aufräumen setzt diese zurück.
+- im **Full-Tunnel** (die THM leitet den gesamten Verkehr durch den Tunnel) die fehlende
+  **Default-Route**: Das `vpnc-script` ersetzt die normale Default-Route durch eine über den
+  Tunnel und merkt sich das alte Gateway in `/var/run/vpnc/defaultroute.<pid>`. Die Route über
+  den Tunnel verschwindet mit dem `utun`-Interface – danach gibt es kein Internet mehr. Als Rest
+  gilt das nur, wenn zugleich eine solche verwaiste Datei existiert (sonst ist man schlicht
+  offline). Das Aufräumen entfernt zuerst den Tunnel-Eintrag, der sich als primäres Interface
+  ausgibt (`OverridePrimary`); meist setzt macOS die Route dann selbst. Sonst trägt das Skript
+  den aktuellen Router des primären Dienstes ein, ersatzweise das gesicherte Gateway – beides
+  nur, wenn es direkt im lokalen Netz liegt, damit nach einem Netzwechsel kein falsches Gateway
+  gesetzt wird. Klappt beides nicht, hilft WLAN aus- und wieder einschalten. Verwaiste Dateien
+  unter `/var/run/vpnc/` werden in jedem Fall gelöscht.
 
 Das Plugin prüft im getrennten Zustand bei jedem Refresh auf diese Reste (`thmvpn-cleanup.sh
 --check`, ohne Root-Rechte). Findet es welche, listet das Dropdown die Funde und bietet
-**„Aufräumen"**. Das Symbol wird nur bei DNS-Resten zu **🔓⚠️** – sie stören auch ohne VPN, weil
-`thm.de`-Namen dann nicht mehr auflösen. Eine alte Route allein stört nur beim Verbinden und wird
+**„Aufräumen"**. Das Symbol wird nur bei DNS-Resten und fehlender Default-Route zu **🔓⚠️** – sie
+stören auch ohne VPN, weil `thm.de`-Namen nicht mehr auflösen bzw. gar kein Internet mehr geht.
+Eine alte Gateway-Route allein stört nur beim Verbinden und wird
 dort ohnehin automatisch entfernt (siehe unten), daher bleibt das Symbol dann **🔓**. Die nötigen Root-Rechte holt sich der Menüpunkt wie
 „VPN trennen" (Touch ID im Terminal, sonst Admin-Dialog). Zusätzlich räumt **„VPN verbinden"**
 vor dem Verbindungsaufbau automatisch auf – das `sudo` wird dort ohnehin abgefragt.
@@ -297,6 +309,6 @@ sudo rm -f /etc/pam.d/sudo_local                   # nur falls ausschließlich f
 | `plugins/thmvpn.10s.sh` | SwiftBar-Plugin: zeigt Status + Verbinden-/Trennen-Knopf, Refresh alle 10 s |
 | `thmvpn-connect.sh`     | Helfer: startet openconnect in einem Terminal (liest `thmvpn.conf`) |
 | `thmvpn-disconnect.sh`  | Helfer: beendet openconnect sauber (per Admin-Dialog) |
-| `thmvpn-cleanup.sh`     | Helfer: Health-Check und Aufräumen von Resten abgebrochener Sitzungen (Route, DNS) |
+| `thmvpn-cleanup.sh`     | Helfer: Health-Check und Aufräumen von Resten abgebrochener Sitzungen (Routen, DNS) |
 | `thmvpn.conf.example`   | Vorlage für die Konfiguration (RZ-Kennung, Gateway, Gruppe) |
 | `install.sh`            | Einrichtung in einem Schritt |
