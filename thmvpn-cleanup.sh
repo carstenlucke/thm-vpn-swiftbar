@@ -30,47 +30,65 @@ gateway_ips() {
   /usr/bin/dscacheutil -q host -a name "$HOST" | /usr/bin/awk '/^ip_address:/ {print $2}'
 }
 
-# Gibt je Altlast eine Zeile "route <ip>" bzw. "dns <utunN>" aus.
-find_stale() {
-  /usr/bin/pgrep -q -x openconnect && return
-
-  local routes ip svc
-  routes=$(/usr/sbin/netstat -rn -f inet)
-  for ip in $(gateway_ips); do
-    echo "$routes" | /usr/bin/awk -v ip="$ip" \
-      '$1 == ip && $3 ~ /H/ && $3 ~ /S/ {print "route " ip; exit}'
-  done
-
-  # Vom vpnc-script angelegte Tunnel-Dienste, die auf thm.de verweisen.
+# Je Altlast eine Zeile "dns <utunN>": vom vpnc-script angelegte
+# Tunnel-Dienste, die auf thm.de verweisen.
+find_stale_dns() {
+  local svc
   for svc in $(printf 'list State:/Network/Service/utun[0-9]+/DNS\n' | /usr/sbin/scutil \
                  | /usr/bin/awk '{print $4}'); do
-    printf 'show %s\n' "$svc" | /usr/sbin/scutil | /usr/bin/grep -q 'thm\.de' || continue
+    printf 'show %s\n' "$svc" | /usr/sbin/scutil | /usr/bin/grep -q ': thm\.de$' || continue
     svc=${svc#State:/Network/Service/}
     echo "dns ${svc%/DNS}"
   done
 }
 
+# Je Altlast eine Zeile "route <ip>": statische Host-Route zum Gateway.
+find_stale_routes() {
+  local routes ip
+  routes=$(/usr/sbin/netstat -rn -f inet)
+  for ip in $(gateway_ips); do
+    echo "$routes" | /usr/bin/awk -v ip="$ip" \
+      '$1 == ip && $3 ~ /H/ && $3 ~ /S/ {print "route " ip; exit}'
+  done
+}
+
+# Gibt je Altlast eine Zeile "route <ip>" bzw. "dns <utunN>" aus.
+# Solange ein alter THM-DNS-Eintrag existiert, laeuft die Aufloesung von
+# vpn.thm.de ins Leere (THM-Nameserver ohne Tunnel unerreichbar) - dann
+# wird die Route nicht geprueft; cleanup() holt das nach Entfernen des DNS nach.
+find_stale() {
+  /usr/bin/pgrep -q -x openconnect && return
+  local dns
+  dns=$(find_stale_dns)
+  if [ -n "$dns" ]; then
+    echo "$dns"
+  else
+    find_stale_routes
+  fi
+}
+
 cleanup() {
   local kind what n=0
+  if /usr/bin/pgrep -q -x openconnect; then
+    echo "==> openconnect laeuft noch - nichts angefasst."
+    return
+  fi
+  # Erst DNS entfernen, damit danach das Gateway wieder aufgeloest werden kann.
   while read -r kind what; do
-    case "$kind" in
-      route)
-        [[ "$what" =~ ^[0-9]+(\.[0-9]+){3}$ ]] || continue
-        echo "    Entferne Host-Route zu $what"
-        /sbin/route -n delete -host "$what" >/dev/null && n=$((n + 1))
-        ;;
-      dns)
-        [[ "$what" =~ ^utun[0-9]+$ ]] || continue
-        echo "    Entferne DNS-Eintrag von $what"
-        printf 'remove State:/Network/Service/%s/IPv4\nremove State:/Network/Service/%s/DNS\n' \
-          "$what" "$what" | /usr/sbin/scutil && n=$((n + 1))
-        ;;
-    esac
-  done < <(find_stale)
+    [[ "$what" =~ ^utun[0-9]+$ ]] || continue
+    echo "    Entferne DNS-Eintrag von $what"
+    printf 'remove State:/Network/Service/%s/IPv4\nremove State:/Network/Service/%s/DNS\n' \
+      "$what" "$what" | /usr/sbin/scutil && n=$((n + 1))
+  done < <(find_stale_dns)
   if [ "$n" -gt 0 ]; then
     /usr/bin/dscacheutil -flushcache
     /usr/bin/killall -HUP mDNSResponder 2>/dev/null
   fi
+  while read -r kind what; do
+    [[ "$what" =~ ^[0-9]+(\.[0-9]+){3}$ ]] || continue
+    echo "    Entferne Host-Route zu $what"
+    /sbin/route -n delete -host "$what" >/dev/null && n=$((n + 1))
+  done < <(find_stale_routes)
   echo "==> $n Altlast(en) entfernt."
 }
 
@@ -115,7 +133,7 @@ RESULT=$(/usr/bin/osascript \
   -e 'on run argv' \
   -e 'do shell script quoted form of (item 1 of argv) & " --as-root" with administrator privileges' \
   -e 'end run' "$0") || exit 1   # Dialog abgebrochen
-RESULT=$(echo "$RESULT" | /usr/bin/tail -n 1)
+RESULT=$(echo "$RESULT" | /usr/bin/tr '\r' '\n' | /usr/bin/tail -n 1)
 /usr/bin/osascript -e 'on run argv' \
   -e 'display notification (item 1 of argv) with title "THM-VPN aufraeumen"' \
   -e 'end run' "${RESULT#==> }"
