@@ -184,6 +184,8 @@ Endet openconnect nicht sauber (Absturz, Ruhezustand, WLAN-Wechsel, `kill -9`), 
 
 - die **DNS-Einträge des Tunnels** (`State:/Network/Service/utunN/DNS`) – Namen unter `thm.de`
   werden dann weiter bei den THM-Nameservern angefragt, die ohne Tunnel nicht erreichbar sind.
+  Das `vpnc-script` trägt die THM-Nameserver außerdem per `networksetup -setdnsservers` dauerhaft
+  am aktiven Netzwerkdienst (z. B. WLAN) ein; das Aufräumen setzt diese zurück.
 
 Das Plugin prüft im getrennten Zustand bei jedem Refresh auf diese Reste (`thmvpn-cleanup.sh
 --check`, ohne Root-Rechte). Findet es welche, listet das Dropdown die Funde und bietet
@@ -193,8 +195,10 @@ dort ohnehin automatisch entfernt (siehe unten), daher bleibt das Symbol dann **
 „VPN trennen" (Touch ID im Terminal, sonst Admin-Dialog). Zusätzlich räumt **„VPN verbinden"**
 vor dem Verbindungsaufbau automatisch auf – das `sudo` wird dort ohnehin abgefragt.
 
-Läuft openconnect, gilt nichts als Rest; dann fasst das Skript nichts an. Ein DNS-Eintrag zählt
-außerdem nur dann als Rest, wenn seine `utun`-Schnittstelle nicht mehr existiert – Einträge eines
+Läuft openconnect oder ein anderer THM-VPN-Client (Tunnel-Adresse `10.196.x`), gilt nichts als
+Rest; dann fasst das Skript nichts an. Ein DNS-Eintrag zählt
+außerdem nur dann als Rest, wenn seine `utun`-Schnittstelle nicht mehr existiert oder nicht mehr
+die eingetragene Tunnel-Adresse trägt (utun-Nummern werden neu vergeben) – Einträge eines
 aktiven anderen VPN-Clients (z. B. Cisco Secure Client) bleiben unberührt. Von Hand:
 
 ```bash

@@ -8,6 +8,7 @@
 #   - die DNS-/IPv4-Eintraege des Tunnels im SystemConfiguration-Store
 #     (State:/Network/Service/utunN/...) -> Namensaufloesung ueber die
 #        THM-Nameserver, die ohne Tunnel nicht erreichbar sind
+#   - die per networksetup am aktiven Netzwerkdienst gesetzten THM-Nameserver
 #
 # Aufruf:
 #   thmvpn-cleanup.sh --check    nur pruefen (ohne Rechte); gibt je Altlast
@@ -17,7 +18,8 @@
 #                                sonst nativer Admin-Dialog)
 #   thmvpn-cleanup.sh --as-root  aufraeumen, setzt Root-Rechte voraus
 #
-# Laeuft openconnect, gilt nichts als Altlast - dann wird nichts angefasst.
+# Laeuft openconnect oder ein anderer THM-VPN-Client (Tunnel-Adresse 10.196.x),
+# gilt nichts als Altlast - dann wird nichts angefasst.
 #
 # Liegt nach der Installation in ~/.config/swiftbar/thmvpn-cleanup.sh
 
@@ -30,30 +32,58 @@ gateway_ips() {
   /usr/bin/dscacheutil -q host -a name "$HOST" | /usr/bin/awk '/^ip_address:/ {print $2}'
 }
 
+# Laeuft gerade ein VPN zur THM? openconnect selbst oder ein anderer Client
+# (z.B. Cisco Secure Client) mit Tunnel-Adresse 10.196.x - dann ist nichts
+# eine Altlast, auch nicht dessen Host-Route zum Gateway.
+vpn_active() {
+  /usr/bin/pgrep -q -x openconnect || /sbin/ifconfig | /usr/bin/grep -q 'inet 10\.196\.'
+}
+
+# Werte eines Arrays (z.B. ServerAddresses) aus einem SystemConfiguration-Key.
+sc_array() {
+  printf 'show %s\n' "$1" | /usr/sbin/scutil \
+    | /usr/bin/awk -v k="$2" '$1 == k {f = 1; next} f && /}/ {f = 0} f {print $3}'
+}
+
 # Je Altlast eine Zeile "dns <utunN>": vom vpnc-script angelegte
 # Tunnel-Dienste, die auf thm.de verweisen und deren utun-Interface nicht mehr
 # existiert. Das Interface verschwindet mit dem Prozess, der es geoeffnet hat;
 # lebt es noch, gehoert der Eintrag einem aktiven VPN (z.B. Cisco Secure Client).
+# Da utun-Nummern neu vergeben werden, zaehlt ein existierendes Interface nur,
+# wenn es auch die im IPv4-Key eingetragene Tunnel-Adresse traegt.
 find_stale_dns() {
-  local svc utun
+  local svc utun addr
   for svc in $(printf 'list State:/Network/Service/utun[0-9]+/DNS\n' | /usr/sbin/scutil \
                  | /usr/bin/awk '{print $4}'); do
     utun=${svc#State:/Network/Service/}
     utun=${utun%/DNS}
-    /sbin/ifconfig "$utun" >/dev/null 2>&1 && continue
+    if /sbin/ifconfig "$utun" >/dev/null 2>&1; then
+      addr=$(sc_array "State:/Network/Service/$utun/IPv4" Addresses | /usr/bin/head -n 1)
+      [ -z "$addr" ] || /sbin/ifconfig "$utun" | /usr/bin/grep -qF "inet $addr " && continue
+    fi
     printf 'show %s\n' "$svc" | /usr/sbin/scutil | /usr/bin/grep -q ': thm\.de$' || continue
     echo "dns $utun"
   done
 }
 
+# Statische Host-Routen ueber ein Gateway (Flags U,G,H,S) - so legt das
+# vpnc-script die Route zum VPN-Gateway an.
+static_host_routes() {
+  /usr/sbin/netstat -rn -f inet \
+    | /usr/bin/awk '$3 ~ /G/ && $3 ~ /H/ && $3 ~ /S/ {print $1}'
+}
+
 # Je Altlast eine Zeile "route <ip>": statische Host-Route zum Gateway.
+# Gibt es keine solche Route, entfaellt die DNS-Abfrage ganz (das Plugin
+# ruft --check alle 10 s auf).
 find_stale_routes() {
-  local routes ip
-  routes=$(/usr/sbin/netstat -rn -f inet)
+  local hosts ip
+  hosts=$(static_host_routes)
+  [ -n "$hosts" ] || return 0
   for ip in $(gateway_ips); do
-    echo "$routes" | /usr/bin/awk -v ip="$ip" \
-      '$1 == ip && $3 ~ /H/ && $3 ~ /S/ {print "route " ip; exit}'
+    printf '%s\n' "$hosts" | /usr/bin/grep -qxF "$ip" && echo "route $ip"
   done
+  return 0
 }
 
 # Gibt je Altlast eine Zeile "route <ip>" bzw. "dns <utunN>" aus.
@@ -61,7 +91,7 @@ find_stale_routes() {
 # vpn.thm.de ins Leere (THM-Nameserver ohne Tunnel unerreichbar) - dann
 # wird die Route nicht geprueft; cleanup() holt das nach Entfernen des DNS nach.
 find_stale() {
-  /usr/bin/pgrep -q -x openconnect && return
+  vpn_active && return
   local dns
   dns=$(find_stale_dns)
   if [ -n "$dns" ]; then
@@ -71,22 +101,47 @@ find_stale() {
   fi
 }
 
+# Das vpnc-script setzt die THM-Nameserver zusaetzlich dauerhaft am aktiven
+# Netzwerkdienst (networksetup -setdnsservers); nur der saubere Abbau nimmt
+# das zurueck. Dienste, deren DNS-Server genau einer der alten Tunnel-
+# Nameserver ist, werden auf automatisch (Empty) zurueckgesetzt.
+reset_service_dns() {
+  local servers="$1" svc
+  [ -n "$servers" ] || return 0
+  while IFS= read -r svc; do
+    /usr/sbin/networksetup -getdnsservers "$svc" 2>/dev/null \
+      | /usr/bin/grep -qxF "$servers" || continue
+    echo "    Setze DNS-Server von \"$svc\" zurueck"
+    /usr/sbin/networksetup -setdnsservers "$svc" Empty
+  done < <(/usr/sbin/networksetup -listallnetworkservices | /usr/bin/tail -n +2 \
+             | /usr/bin/sed 's/^\*//')
+}
+
 cleanup() {
   local kind what n=0
-  if /usr/bin/pgrep -q -x openconnect; then
-    echo "==> openconnect laeuft noch - nichts angefasst."
+  if vpn_active; then
+    echo "==> VPN ist noch aktiv - nichts angefasst."
     return
   fi
   # Erst DNS entfernen, damit danach das Gateway wieder aufgeloest werden kann.
   while read -r kind what; do
     [[ "$what" =~ ^utun[0-9]+$ ]] || continue
     echo "    Entferne DNS-Eintrag von $what"
+    reset_service_dns "$(sc_array "State:/Network/Service/$what/DNS" ServerAddresses)"
     printf 'remove State:/Network/Service/%s/IPv4\nremove State:/Network/Service/%s/DNS\n' \
       "$what" "$what" | /usr/sbin/scutil && n=$((n + 1))
   done < <(find_stale_dns)
   if [ "$n" -gt 0 ]; then
     /usr/bin/dscacheutil -flushcache
     /usr/bin/killall -HUP mDNSResponder 2>/dev/null
+    # mDNSResponder uebernimmt die neue Resolver-Konfiguration asynchron:
+    # Gibt es eine Kandidaten-Route, kurz warten, bis das Gateway aufloest.
+    if [ -n "$(static_host_routes)" ]; then
+      for _ in 1 2 3 4 5; do
+        [ -n "$(gateway_ips)" ] && break
+        sleep 1
+      done
+    fi
   fi
   while read -r kind what; do
     [[ "$what" =~ ^[0-9]+(\.[0-9]+){3}$ ]] || continue
@@ -114,8 +169,8 @@ case "$1" in
 esac
 
 # Ohne Argument: Root-Rechte besorgen, analog zu thmvpn-disconnect.sh.
-if /usr/bin/pgrep -q -x openconnect; then
-  /usr/bin/osascript -e 'display notification "openconnect laeuft noch - erst trennen." with title "THM-VPN aufraeumen"'
+if vpn_active; then
+  /usr/bin/osascript -e 'display notification "VPN ist noch aktiv - erst trennen." with title "THM-VPN aufraeumen"'
   exit 1
 fi
 
