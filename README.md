@@ -191,12 +191,25 @@ die Funde und bietet **„Aufräumen"**. Die nötigen Root-Rechte holt sich der 
 „VPN trennen" (Touch ID im Terminal, sonst Admin-Dialog). Zusätzlich räumt **„VPN verbinden"**
 vor dem Verbindungsaufbau automatisch auf – das `sudo` wird dort ohnehin abgefragt.
 
-Läuft openconnect, gilt nichts als Rest; dann fasst das Skript nichts an. Von Hand:
+Läuft openconnect, gilt nichts als Rest; dann fasst das Skript nichts an. Ein DNS-Eintrag zählt
+außerdem nur dann als Rest, wenn seine `utun`-Schnittstelle nicht mehr existiert – Einträge eines
+aktiven anderen VPN-Clients (z. B. Cisco Secure Client) bleiben unberührt. Von Hand:
 
 ```bash
 ~/.config/swiftbar/thmvpn-cleanup.sh --check   # nur prüfen
 ~/.config/swiftbar/thmvpn-cleanup.sh           # aufräumen
 ```
+
+> **Sicherheitshinweis: Was mit `root`-Rechten läuft.** Beim Aufräumen und beim Verbinden führt
+> `sudo` Code aus, der **dir gehört** und den jeder Prozess mit deinen Benutzerrechten ändern
+> kann: `thmvpn-cleanup.sh --as-root` samt der von ihm eingelesenen `thmvpn.conf` (beide unter
+> `~/.config/swiftbar/`) sowie die Homebrew-Binary `openconnect`. Wer bereits Code unter deinem
+> Konto ausführt, könnte sich so beim nächsten bestätigten `sudo` (Touch ID oder Passwort)
+> `root`-Rechte verschaffen. Das Skript erweitert damit kein bestehendes Risiko – `sudo openconnect`
+> aus Homebrew hat dieselbe Eigenschaft –, ist aber kein Schutz gegen bereits kompromittierte
+> Benutzerkonten. Wer das ausschließen will, müsste die Helfer `root`-eigen ablegen
+> (z. B. `/usr/local/libexec`, Modus `755`, Eigentümer `root:wheel`) und `openconnect` aus einer
+> nicht benutzerschreibbaren Quelle beziehen.
 
 ---
 

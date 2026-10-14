@@ -31,14 +31,18 @@ gateway_ips() {
 }
 
 # Je Altlast eine Zeile "dns <utunN>": vom vpnc-script angelegte
-# Tunnel-Dienste, die auf thm.de verweisen.
+# Tunnel-Dienste, die auf thm.de verweisen und deren utun-Interface nicht mehr
+# existiert. Das Interface verschwindet mit dem Prozess, der es geoeffnet hat;
+# lebt es noch, gehoert der Eintrag einem aktiven VPN (z.B. Cisco Secure Client).
 find_stale_dns() {
-  local svc
+  local svc utun
   for svc in $(printf 'list State:/Network/Service/utun[0-9]+/DNS\n' | /usr/sbin/scutil \
                  | /usr/bin/awk '{print $4}'); do
+    utun=${svc#State:/Network/Service/}
+    utun=${utun%/DNS}
+    /sbin/ifconfig "$utun" >/dev/null 2>&1 && continue
     printf 'show %s\n' "$svc" | /usr/sbin/scutil | /usr/bin/grep -q ': thm\.de$' || continue
-    svc=${svc#State:/Network/Service/}
-    echo "dns ${svc%/DNS}"
+    echo "dns $utun"
   done
 }
 
@@ -124,6 +128,7 @@ if /usr/bin/grep -qsE '^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+pam_ti
   fi
   echo "==> Raeume Reste der letzten VPN-Sitzung auf (sudo per Touch ID bestaetigen) ..."
   /usr/bin/sudo "$0" --as-root
+  /usr/bin/open -g "swiftbar://refreshplugin?name=thmvpn"
   echo "    Dieses Fenster kann geschlossen werden."
   exit
 fi

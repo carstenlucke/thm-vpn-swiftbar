@@ -29,7 +29,8 @@ if /usr/bin/grep -qsE '^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+pam_ti
   echo "==> Trenne THM-VPN (sudo per Touch ID bestaetigen) ..."
   /usr/bin/sudo /usr/bin/pkill -INT openconnect
   sleep 2
-  echo "==> Fertig - der Menueleisten-Status aktualisiert sich gleich."
+  /usr/bin/open -g "swiftbar://refreshplugin?name=thmvpn"
+  echo "==> Fertig - der Menueleisten-Status ist aktualisiert."
   echo "    Dieses Fenster kann geschlossen werden."
   exit
 fi
