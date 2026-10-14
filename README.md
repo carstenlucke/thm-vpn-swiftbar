@@ -8,6 +8,7 @@ AnyConnect – plus eine kleine **Statusanzeige in der macOS-Menüleiste** über
 ```
 🔒 THM      ← verbunden (Dropdown zeigt Tunnel-IP + "VPN trennen")
 🔓          ← getrennt (Dropdown zeigt "VPN verbinden")
+🔓⚠️        ← getrennt, aber Reste einer abgebrochenen Sitzung (Dropdown zeigt "Aufräumen")
 ```
 
 Getestet auf macOS (Apple Silicon) mit openconnect 9.12 und SwiftBar 2.0.
@@ -115,9 +116,11 @@ mkdir -p ~/.config/swiftbar/plugins
 cp plugins/thmvpn.10s.sh   ~/.config/swiftbar/plugins/
 cp thmvpn-disconnect.sh    ~/.config/swiftbar/
 cp thmvpn-connect.sh       ~/.config/swiftbar/
+cp thmvpn-cleanup.sh       ~/.config/swiftbar/
 chmod +x ~/.config/swiftbar/plugins/thmvpn.10s.sh \
          ~/.config/swiftbar/thmvpn-disconnect.sh \
-         ~/.config/swiftbar/thmvpn-connect.sh
+         ~/.config/swiftbar/thmvpn-connect.sh \
+         ~/.config/swiftbar/thmvpn-cleanup.sh
 
 # Konfig-Vorlage anlegen (RZ-Kennung dort eintragen)
 cp thmvpn.conf.example     ~/.config/swiftbar/thmvpn.conf
@@ -166,6 +169,34 @@ sudo sh -c "sed 's/^#auth/auth/' /etc/pam.d/sudo_local.template > /etc/pam.d/sud
 > **dir gehörenden** Verzeichnis und lässt sich per `--script` zum Ausführen beliebigen Codes
 > bewegen. Eine `NOPASSWD`-Regel darauf käme faktisch passwortlosem `root` gleich – Touch ID ist
 > der sichere Weg zum selben Komfort.
+
+### Health-Check: Reste einer abgebrochenen Sitzung aufräumen
+
+Endet openconnect nicht sauber (Absturz, Ruhezustand, WLAN-Wechsel, `kill -9`), kommt das
+`vpnc-script` nicht mehr zum Aufräumen. Zurück bleiben:
+
+- die **statische Host-Route zum VPN-Gateway** (`route add -host 212.201.18.252 …`). Der nächste
+  Verbindungsversuch scheitert dann mit
+
+  ```
+  Verbindung zum 212.201.18.252:443 fehlgeschlagen: Can't assign requested address
+  ```
+
+- die **DNS-Einträge des Tunnels** (`State:/Network/Service/utunN/DNS`) – Namen unter `thm.de`
+  werden dann weiter bei den THM-Nameservern angefragt, die ohne Tunnel nicht erreichbar sind.
+
+Das Plugin prüft im getrennten Zustand bei jedem Refresh auf diese Reste (`thmvpn-cleanup.sh
+--check`, ohne Root-Rechte). Findet es welche, wird das Symbol zu **🔓⚠️**, das Dropdown listet
+die Funde und bietet **„Aufräumen"**. Die nötigen Root-Rechte holt sich der Menüpunkt wie
+„VPN trennen" (Touch ID im Terminal, sonst Admin-Dialog). Zusätzlich räumt **„VPN verbinden"**
+vor dem Verbindungsaufbau automatisch auf – das `sudo` wird dort ohnehin abgefragt.
+
+Läuft openconnect, gilt nichts als Rest; dann fasst das Skript nichts an. Von Hand:
+
+```bash
+~/.config/swiftbar/thmvpn-cleanup.sh --check   # nur prüfen
+~/.config/swiftbar/thmvpn-cleanup.sh           # aufräumen
+```
 
 ---
 
@@ -229,6 +260,7 @@ sudo chmod 440 /etc/sudoers.d/openconnect-disconnect
 rm -f ~/.config/swiftbar/plugins/thmvpn.10s.sh \
       ~/.config/swiftbar/thmvpn-disconnect.sh \
       ~/.config/swiftbar/thmvpn-connect.sh \
+      ~/.config/swiftbar/thmvpn-cleanup.sh \
       ~/.config/swiftbar/thmvpn.conf
 # optional:
 brew uninstall --cask swiftbar
@@ -246,5 +278,6 @@ sudo rm -f /etc/pam.d/sudo_local                   # nur falls ausschließlich f
 | `plugins/thmvpn.10s.sh` | SwiftBar-Plugin: zeigt Status + Verbinden-/Trennen-Knopf, Refresh alle 10 s |
 | `thmvpn-connect.sh`     | Helfer: startet openconnect in einem Terminal (liest `thmvpn.conf`) |
 | `thmvpn-disconnect.sh`  | Helfer: beendet openconnect sauber (per Admin-Dialog) |
+| `thmvpn-cleanup.sh`     | Helfer: Health-Check und Aufräumen von Resten abgebrochener Sitzungen (Route, DNS) |
 | `thmvpn.conf.example`   | Vorlage für die Konfiguration (RZ-Kennung, Gateway, Gruppe) |
 | `install.sh`            | Einrichtung in einem Schritt |

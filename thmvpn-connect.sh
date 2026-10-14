@@ -31,6 +31,15 @@ echo "    sudo- und VPN-Passwort eingeben (ggf. zweiter Faktor)."
 echo "    Trennen: Strg-C in diesem Fenster oder Menuepunkt 'VPN trennen'."
 echo
 
+# Reste einer nicht sauber beendeten Sitzung (v.a. die alte Host-Route zum
+# Gateway) lassen den Verbindungsaufbau scheitern -> vorher aufraeumen.
+CLEANUP="$(dirname "$0")/thmvpn-cleanup.sh"
+if [ -x "$CLEANUP" ] && ! "$CLEANUP" --check >/dev/null; then
+  echo "==> Raeume Reste der letzten VPN-Sitzung auf"
+  sudo "$CLEANUP" --as-root
+  echo
+fi
+
 sudo openconnect "${ARGS[@]}" "$HOST"
 
 echo

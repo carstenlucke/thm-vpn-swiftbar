@@ -25,7 +25,9 @@ mkdir -p "$PLUGIN_DIR"
 cp "$REPO_DIR/plugins/thmvpn.10s.sh" "$PLUGIN_DIR/thmvpn.10s.sh"
 cp "$REPO_DIR/thmvpn-disconnect.sh" "$SWIFTBAR_DIR/thmvpn-disconnect.sh"
 cp "$REPO_DIR/thmvpn-connect.sh"    "$SWIFTBAR_DIR/thmvpn-connect.sh"
-chmod +x "$PLUGIN_DIR/thmvpn.10s.sh" "$SWIFTBAR_DIR/thmvpn-disconnect.sh" "$SWIFTBAR_DIR/thmvpn-connect.sh"
+cp "$REPO_DIR/thmvpn-cleanup.sh"    "$SWIFTBAR_DIR/thmvpn-cleanup.sh"
+chmod +x "$PLUGIN_DIR/thmvpn.10s.sh" "$SWIFTBAR_DIR/thmvpn-disconnect.sh" \
+         "$SWIFTBAR_DIR/thmvpn-connect.sh" "$SWIFTBAR_DIR/thmvpn-cleanup.sh"
 
 # Config-Vorlage anlegen, vorhandene Konfiguration nicht ueberschreiben
 if [ ! -f "$SWIFTBAR_DIR/thmvpn.conf" ]; then
@@ -75,6 +77,7 @@ echo
 echo "Fertig. In der Menueleiste erscheint:"
 echo "  🔒 THM  - VPN verbunden (mit 'VPN trennen' im Dropdown)"
 echo "  🔓      - VPN getrennt  (mit 'VPN verbinden' im Dropdown)"
+echo "  🔓⚠️    - getrennt, aber Reste einer abgebrochenen Sitzung ('Aufräumen' im Dropdown)"
 echo
 echo "Verbinden geht jetzt per Menue ('VPN verbinden' oeffnet ein Terminal)"
 echo "oder manuell:  sudo openconnect --protocol=anyconnect --user=<rz-kennung> vpn.thm.de"
