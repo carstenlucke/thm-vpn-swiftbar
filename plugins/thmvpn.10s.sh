@@ -1,6 +1,6 @@
 #!/bin/bash
 # <xbar.title>THM VPN Status</xbar.title>
-# <xbar.version>v1.3</xbar.version>
+# <xbar.version>v1.2.0</xbar.version>
 # <xbar.author>Carsten Lucke</xbar.author>
 # <xbar.desc>Zeigt in der Menueleiste an, ob openconnect mit dem THM-VPN (Netz 10.196.x) verbunden ist, inkl. Verbinden- und Trennen-Knopf sowie Health-Check fuer Reste abgebrochener Sitzungen.</xbar.desc>
 #

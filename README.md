@@ -8,10 +8,11 @@ AnyConnect – plus eine kleine **Statusanzeige in der macOS-Menüleiste** über
 ```
 🔒 THM      ← verbunden (Dropdown zeigt Tunnel-IP + "VPN trennen")
 🔓          ← getrennt (Dropdown zeigt "VPN verbinden")
-🔓⚠️        ← getrennt, aber alte THM-DNS-Einträge einer abgebrochenen Sitzung (Dropdown zeigt "Aufräumen")
+🔓⚠️        ← getrennt, aber Reste einer abgebrochenen Sitzung: alte THM-DNS-Einträge oder fehlende
+              Default-Route (Dropdown zeigt "Aufräumen")
 ```
 
-Getestet auf macOS (Apple Silicon) mit openconnect 9.12 und SwiftBar 2.0.
+Getestet auf macOS (Apple Silicon) mit openconnect 9.21 und SwiftBar 2.1.
 
 ---
 
