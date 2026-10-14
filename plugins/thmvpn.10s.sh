@@ -21,8 +21,11 @@ if /sbin/ifconfig | grep -q "inet 10.196"; then
   echo "VPN trennen | shell=\"$DISCONNECT\" terminal=false refresh=true color=#cf222e"
 else
   # Health-Check: Reste einer nicht sauber beendeten Sitzung (Route, DNS)?
+  # Das Warnsymbol nur bei DNS-Resten: Sie stoeren auch ohne VPN (thm.de-Namen
+  # loesen nicht auf). Eine alte Route stoert nur beim Verbinden, und
+  # "VPN verbinden" raeumt sie ohnehin vorher weg.
   STALE=$("$CLEANUP" --check 2>/dev/null)
-  if [ -n "$STALE" ]; then
+  if echo "$STALE" | grep -q '^dns '; then
     echo "🔓⚠️"
   else
     echo "🔓"
@@ -34,7 +37,7 @@ else
     echo "Reste der letzten VPN-Sitzung | color=#bf8700"
     echo "$STALE" | while read -r KIND WHAT; do
       case "$KIND" in
-        route) echo "Alte Route zu $WHAT (blockiert Verbinden) | font=Menlo size=12" ;;
+        route) echo "Alte Route zu $WHAT (wird beim Verbinden entfernt) | font=Menlo size=12" ;;
         dns)   echo "Alter THM-DNS auf $WHAT | font=Menlo size=12" ;;
       esac
     done

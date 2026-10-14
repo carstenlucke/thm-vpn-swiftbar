@@ -77,7 +77,7 @@ echo
 echo "Fertig. In der Menueleiste erscheint:"
 echo "  🔒 THM  - VPN verbunden (mit 'VPN trennen' im Dropdown)"
 echo "  🔓      - VPN getrennt  (mit 'VPN verbinden' im Dropdown)"
-echo "  🔓⚠️    - getrennt, aber Reste einer abgebrochenen Sitzung ('Aufräumen' im Dropdown)"
+echo "  🔓⚠️    - getrennt, aber alte THM-DNS-Eintraege einer abgebrochenen Sitzung ('Aufräumen' im Dropdown)"
 echo
 echo "Verbinden geht jetzt per Menue ('VPN verbinden' oeffnet ein Terminal)"
 echo "oder manuell:  sudo openconnect --protocol=anyconnect --user=<rz-kennung> vpn.thm.de"

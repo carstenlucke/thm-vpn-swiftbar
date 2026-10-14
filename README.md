@@ -8,7 +8,7 @@ AnyConnect – plus eine kleine **Statusanzeige in der macOS-Menüleiste** über
 ```
 🔒 THM      ← verbunden (Dropdown zeigt Tunnel-IP + "VPN trennen")
 🔓          ← getrennt (Dropdown zeigt "VPN verbinden")
-🔓⚠️        ← getrennt, aber Reste einer abgebrochenen Sitzung (Dropdown zeigt "Aufräumen")
+🔓⚠️        ← getrennt, aber alte THM-DNS-Einträge einer abgebrochenen Sitzung (Dropdown zeigt "Aufräumen")
 ```
 
 Getestet auf macOS (Apple Silicon) mit openconnect 9.12 und SwiftBar 2.0.
@@ -186,8 +186,10 @@ Endet openconnect nicht sauber (Absturz, Ruhezustand, WLAN-Wechsel, `kill -9`), 
   werden dann weiter bei den THM-Nameservern angefragt, die ohne Tunnel nicht erreichbar sind.
 
 Das Plugin prüft im getrennten Zustand bei jedem Refresh auf diese Reste (`thmvpn-cleanup.sh
---check`, ohne Root-Rechte). Findet es welche, wird das Symbol zu **🔓⚠️**, das Dropdown listet
-die Funde und bietet **„Aufräumen"**. Die nötigen Root-Rechte holt sich der Menüpunkt wie
+--check`, ohne Root-Rechte). Findet es welche, listet das Dropdown die Funde und bietet
+**„Aufräumen"**. Das Symbol wird nur bei DNS-Resten zu **🔓⚠️** – sie stören auch ohne VPN, weil
+`thm.de`-Namen dann nicht mehr auflösen. Eine alte Route allein stört nur beim Verbinden und wird
+dort ohnehin automatisch entfernt (siehe unten), daher bleibt das Symbol dann **🔓**. Die nötigen Root-Rechte holt sich der Menüpunkt wie
 „VPN trennen" (Touch ID im Terminal, sonst Admin-Dialog). Zusätzlich räumt **„VPN verbinden"**
 vor dem Verbindungsaufbau automatisch auf – das `sudo` wird dort ohnehin abgefragt.
 
