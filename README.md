@@ -8,6 +8,7 @@ AnyConnect – plus eine kleine **Statusanzeige in der macOS-Menüleiste** über
 ```
 🔒 THM      ← verbunden (Dropdown zeigt Tunnel-IP + "VPN trennen")
 🔓          ← getrennt (Dropdown zeigt "VPN verbinden")
+🔓⚠️        ← getrennt, aber alte THM-DNS-Einträge einer abgebrochenen Sitzung (Dropdown zeigt "Aufräumen")
 ```
 
 Getestet auf macOS (Apple Silicon) mit openconnect 9.12 und SwiftBar 2.0.
@@ -115,9 +116,11 @@ mkdir -p ~/.config/swiftbar/plugins
 cp plugins/thmvpn.10s.sh   ~/.config/swiftbar/plugins/
 cp thmvpn-disconnect.sh    ~/.config/swiftbar/
 cp thmvpn-connect.sh       ~/.config/swiftbar/
+cp thmvpn-cleanup.sh       ~/.config/swiftbar/
 chmod +x ~/.config/swiftbar/plugins/thmvpn.10s.sh \
          ~/.config/swiftbar/thmvpn-disconnect.sh \
-         ~/.config/swiftbar/thmvpn-connect.sh
+         ~/.config/swiftbar/thmvpn-connect.sh \
+         ~/.config/swiftbar/thmvpn-cleanup.sh
 
 # Konfig-Vorlage anlegen (RZ-Kennung dort eintragen)
 cp thmvpn.conf.example     ~/.config/swiftbar/thmvpn.conf
@@ -166,6 +169,65 @@ sudo sh -c "sed 's/^#auth/auth/' /etc/pam.d/sudo_local.template > /etc/pam.d/sud
 > **dir gehörenden** Verzeichnis und lässt sich per `--script` zum Ausführen beliebigen Codes
 > bewegen. Eine `NOPASSWD`-Regel darauf käme faktisch passwortlosem `root` gleich – Touch ID ist
 > der sichere Weg zum selben Komfort.
+
+### Health-Check: Reste einer abgebrochenen Sitzung aufräumen
+
+Endet openconnect nicht sauber (Absturz, Ruhezustand, WLAN-Wechsel, `kill -9`), kommt das
+`vpnc-script` nicht mehr zum Aufräumen. Zurück bleiben:
+
+- die **statische Host-Route zum VPN-Gateway** (`route add -host 212.201.18.252 …`). Der nächste
+  Verbindungsversuch scheitert dann mit
+
+  ```
+  Verbindung zum 212.201.18.252:443 fehlgeschlagen: Can't assign requested address
+  ```
+
+- die **DNS-Einträge des Tunnels** (`State:/Network/Service/utunN/DNS`) – Namen unter `thm.de`
+  werden dann weiter bei den THM-Nameservern angefragt, die ohne Tunnel nicht erreichbar sind.
+  Das `vpnc-script` trägt die THM-Nameserver außerdem per `networksetup -setdnsservers` dauerhaft
+  am aktiven Netzwerkdienst (z. B. WLAN) ein; das Aufräumen setzt diese zurück.
+- im **Full-Tunnel** (die THM leitet den gesamten Verkehr durch den Tunnel) die fehlende
+  **Default-Route**: Das `vpnc-script` ersetzt die normale Default-Route durch eine über den
+  Tunnel und merkt sich das alte Gateway in `/var/run/vpnc/defaultroute.<pid>`. Die Route über
+  den Tunnel verschwindet mit dem `utun`-Interface – danach gibt es kein Internet mehr. Als Rest
+  gilt das nur, wenn zugleich eine solche verwaiste Datei existiert (sonst ist man schlicht
+  offline). Das Aufräumen entfernt zuerst den Tunnel-Eintrag, der sich als primäres Interface
+  ausgibt (`OverridePrimary`); meist setzt macOS die Route dann selbst. Sonst trägt das Skript
+  den aktuellen Router des primären Dienstes ein, ersatzweise das gesicherte Gateway – beides
+  nur, wenn es direkt im lokalen Netz liegt, damit nach einem Netzwechsel kein falsches Gateway
+  gesetzt wird. Klappt beides nicht, hilft WLAN aus- und wieder einschalten. Verwaiste Dateien
+  unter `/var/run/vpnc/` werden in jedem Fall gelöscht.
+
+Das Plugin prüft im getrennten Zustand bei jedem Refresh auf diese Reste (`thmvpn-cleanup.sh
+--check`, ohne Root-Rechte). Findet es welche, listet das Dropdown die Funde und bietet
+**„Aufräumen"**. Das Symbol wird nur bei DNS-Resten und fehlender Default-Route zu **🔓⚠️** – sie
+stören auch ohne VPN, weil `thm.de`-Namen nicht mehr auflösen bzw. gar kein Internet mehr geht.
+Eine alte Gateway-Route allein stört nur beim Verbinden und wird
+dort ohnehin automatisch entfernt (siehe unten), daher bleibt das Symbol dann **🔓**. Die nötigen Root-Rechte holt sich der Menüpunkt wie
+„VPN trennen" (Touch ID im Terminal, sonst Admin-Dialog). Zusätzlich räumt **„VPN verbinden"**
+vor dem Verbindungsaufbau automatisch auf – das `sudo` wird dort ohnehin abgefragt.
+
+Läuft openconnect oder ein anderer THM-VPN-Client (Tunnel-Adresse `10.196.x`), gilt nichts als
+Rest; dann fasst das Skript nichts an. Ein DNS-Eintrag zählt
+außerdem nur dann als Rest, wenn seine `utun`-Schnittstelle nicht mehr existiert oder nicht mehr
+die eingetragene Tunnel-Adresse trägt (utun-Nummern werden neu vergeben) – Einträge eines
+aktiven anderen VPN-Clients (z. B. Cisco Secure Client) bleiben unberührt. Von Hand:
+
+```bash
+~/.config/swiftbar/thmvpn-cleanup.sh --check   # nur prüfen
+~/.config/swiftbar/thmvpn-cleanup.sh           # aufräumen
+```
+
+> **Sicherheitshinweis: Was mit `root`-Rechten läuft.** Beim Aufräumen und beim Verbinden führt
+> `sudo` Code aus, der **dir gehört** und den jeder Prozess mit deinen Benutzerrechten ändern
+> kann: `thmvpn-cleanup.sh --as-root` samt der von ihm eingelesenen `thmvpn.conf` (beide unter
+> `~/.config/swiftbar/`) sowie die Homebrew-Binary `openconnect`. Wer bereits Code unter deinem
+> Konto ausführt, könnte sich so beim nächsten bestätigten `sudo` (Touch ID oder Passwort)
+> `root`-Rechte verschaffen. Das Skript erweitert damit kein bestehendes Risiko – `sudo openconnect`
+> aus Homebrew hat dieselbe Eigenschaft –, ist aber kein Schutz gegen bereits kompromittierte
+> Benutzerkonten. Wer das ausschließen will, müsste die Helfer `root`-eigen ablegen
+> (z. B. `/usr/local/libexec`, Modus `755`, Eigentümer `root:wheel`) und `openconnect` aus einer
+> nicht benutzerschreibbaren Quelle beziehen.
 
 ---
 
@@ -229,6 +291,7 @@ sudo chmod 440 /etc/sudoers.d/openconnect-disconnect
 rm -f ~/.config/swiftbar/plugins/thmvpn.10s.sh \
       ~/.config/swiftbar/thmvpn-disconnect.sh \
       ~/.config/swiftbar/thmvpn-connect.sh \
+      ~/.config/swiftbar/thmvpn-cleanup.sh \
       ~/.config/swiftbar/thmvpn.conf
 # optional:
 brew uninstall --cask swiftbar
@@ -246,5 +309,6 @@ sudo rm -f /etc/pam.d/sudo_local                   # nur falls ausschließlich f
 | `plugins/thmvpn.10s.sh` | SwiftBar-Plugin: zeigt Status + Verbinden-/Trennen-Knopf, Refresh alle 10 s |
 | `thmvpn-connect.sh`     | Helfer: startet openconnect in einem Terminal (liest `thmvpn.conf`) |
 | `thmvpn-disconnect.sh`  | Helfer: beendet openconnect sauber (per Admin-Dialog) |
+| `thmvpn-cleanup.sh`     | Helfer: Health-Check und Aufräumen von Resten abgebrochener Sitzungen (Routen, DNS) |
 | `thmvpn.conf.example`   | Vorlage für die Konfiguration (RZ-Kennung, Gateway, Gruppe) |
 | `install.sh`            | Einrichtung in einem Schritt |
