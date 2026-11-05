@@ -12,6 +12,20 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SWIFTBAR_DIR="$HOME/.config/swiftbar"
 PLUGIN_DIR="$SWIFTBAR_DIR/plugins"
 
+# Kopiert eine Datei. Eine vorhandene, nicht beschreibbare Datei (z.B. root-eigen
+# nach einem "sudo cp") wird vorher entfernt, sonst braeche cp die Installation
+# ab. Das geht ohne sudo, weil der Ordner dem Benutzer gehoert; die Datei gehoert
+# danach wie bei einer frischen Installation dem Benutzer. Schutz geht dadurch
+# nicht verloren: In diesem Ordner kann der Benutzer sie ohnehin ersetzen.
+install_file() {
+  local src="$1" dst="$2"
+  if [ -e "$dst" ] && [ ! -w "$dst" ]; then
+    echo "    Ersetze nicht beschreibbare Datei: $dst"
+    rm -f "$dst"
+  fi
+  cp "$src" "$dst"
+}
+
 echo "==> Homebrew-Pakete pruefen"
 if ! command -v brew >/dev/null; then
   echo "FEHLER: Homebrew ist nicht installiert -> https://brew.sh" >&2
@@ -22,11 +36,11 @@ command -v openconnect >/dev/null || brew install openconnect
 
 echo "==> Skripte installieren nach $SWIFTBAR_DIR"
 mkdir -p "$PLUGIN_DIR"
-cp "$REPO_DIR/plugins/thmvpn.10s.sh" "$PLUGIN_DIR/thmvpn.10s.sh"
-cp "$REPO_DIR/thmvpn-disconnect.sh" "$SWIFTBAR_DIR/thmvpn-disconnect.sh"
-cp "$REPO_DIR/thmvpn-connect.sh"    "$SWIFTBAR_DIR/thmvpn-connect.sh"
-cp "$REPO_DIR/thmvpn-closewindow.sh" "$SWIFTBAR_DIR/thmvpn-closewindow.sh"
-cp "$REPO_DIR/thmvpn-cleanup.sh"    "$SWIFTBAR_DIR/thmvpn-cleanup.sh"
+install_file "$REPO_DIR/plugins/thmvpn.10s.sh"  "$PLUGIN_DIR/thmvpn.10s.sh"
+install_file "$REPO_DIR/thmvpn-disconnect.sh"   "$SWIFTBAR_DIR/thmvpn-disconnect.sh"
+install_file "$REPO_DIR/thmvpn-connect.sh"      "$SWIFTBAR_DIR/thmvpn-connect.sh"
+install_file "$REPO_DIR/thmvpn-closewindow.sh"  "$SWIFTBAR_DIR/thmvpn-closewindow.sh"
+install_file "$REPO_DIR/thmvpn-cleanup.sh"      "$SWIFTBAR_DIR/thmvpn-cleanup.sh"
 chmod +x "$PLUGIN_DIR/thmvpn.10s.sh" "$SWIFTBAR_DIR/thmvpn-disconnect.sh" \
          "$SWIFTBAR_DIR/thmvpn-connect.sh" "$SWIFTBAR_DIR/thmvpn-cleanup.sh" \
          "$SWIFTBAR_DIR/thmvpn-closewindow.sh"

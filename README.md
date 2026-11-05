@@ -104,7 +104,9 @@ cd thm-vpn-swiftbar
 
 `install.sh` installiert bei Bedarf `openconnect` und `SwiftBar` via Homebrew, kopiert die
 Skripte und eine Konfig-Vorlage nach `~/.config/swiftbar/`, setzt den SwiftBar-Plugin-Ordner und
-startet SwiftBar.
+startet SwiftBar. Für ein Update reicht es, `./install.sh` erneut aufzurufen; nicht beschreibbare
+Dateien (etwa `root`-eigene nach einem `sudo cp`) ersetzt es dabei ohne `sudo` durch neue, die dir
+gehören.
 
 ### Manuelle Installation
 
