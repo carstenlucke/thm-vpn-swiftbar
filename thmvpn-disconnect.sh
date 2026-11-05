@@ -24,25 +24,29 @@ fi
 # Terminal (z.B. aus SwiftBar) in einem Terminal-Fenster neu starten.
 if /usr/bin/grep -qsE '^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+pam_tid' \
      /etc/pam.d/sudo_local /etc/pam.d/sudo; then
-  OWN_WINDOW_MARKER="${TMPDIR:-/tmp}/thmvpn-own-window"
+  OWN_WINDOW_MARKER="${TMPDIR:-/tmp}/thmvpn-own-window.$(basename "$0")"
   if [ ! -t 0 ]; then
     /usr/bin/touch "$OWN_WINDOW_MARKER"
     exec /usr/bin/open -a Terminal "$0"
   fi
   OWN_WINDOW=0
-  if [ -f "$OWN_WINDOW_MARKER" ]; then
-    /bin/rm -f "$OWN_WINDOW_MARKER"
-    OWN_WINDOW=1
-  fi
+  # Nur ein frischer Marker zaehlt: ein liegengebliebener (open gescheitert)
+  # darf kein von Hand geoeffnetes Fenster schliessen.
+  [ -n "$(/usr/bin/find "$OWN_WINDOW_MARKER" -mtime -60s 2>/dev/null)" ] && OWN_WINDOW=1
+  /bin/rm -f "$OWN_WINDOW_MARKER"
   echo "==> Trenne THM-VPN (sudo per Touch ID bestaetigen) ..."
   /usr/bin/sudo /usr/bin/pkill -INT openconnect
   STATUS=$?
   sleep 2
   /usr/bin/open -g "swiftbar://refreshplugin?name=thmvpn"
-  echo "==> Fertig - der Menueleisten-Status ist aktualisiert."
+  if [ "$STATUS" -eq 0 ]; then
+    echo "==> Fertig - der Menueleisten-Status ist aktualisiert."
+  else
+    echo "==> Trennen fehlgeschlagen (Status $STATUS) - kein openconnect beendet."
+  fi
   CLOSE_WINDOW="$(dirname "$0")/thmvpn-closewindow.sh"
   if [ "$STATUS" -eq 0 ] && [ "$OWN_WINDOW" -eq 1 ] && [ -x "$CLOSE_WINDOW" ]; then
-    nohup "$CLOSE_WINDOW" "$(tty)" </dev/null >/dev/null 2>&1 &
+    nohup "$CLOSE_WINDOW" "$(tty)" "$$" </dev/null >/dev/null 2>&1 &
     disown
   else
     echo "    Dieses Fenster kann geschlossen werden."

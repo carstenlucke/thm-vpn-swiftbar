@@ -314,7 +314,7 @@ sudo rm -f /etc/pam.d/sudo_local                   # nur falls ausschließlich f
 | `plugins/thmvpn.10s.sh` | SwiftBar-Plugin: zeigt Status + Verbinden-/Trennen-Knopf, Refresh alle 10 s |
 | `thmvpn-connect.sh`     | Helfer: startet openconnect in einem Terminal (liest `thmvpn.conf`) |
 | `thmvpn-disconnect.sh`  | Helfer: beendet openconnect sauber (per Admin-Dialog) |
-| `thmvpn-closewindow.sh` | Helfer: schließt das Terminal-Fenster nach sauberem Trennen |
+| `thmvpn-closewindow.sh` | Helfer: schließt das selbst geöffnete Terminal-Fenster nach erfolgreichem Ende (verbinden, trennen, aufräumen) |
 | `thmvpn-cleanup.sh`     | Helfer: Health-Check und Aufräumen von Resten abgebrochener Sitzungen (Routen, DNS) |
 | `thmvpn.conf.example`   | Vorlage für die Konfiguration (RZ-Kennung, Gateway, Gruppe) |
 | `install.sh`            | Einrichtung in einem Schritt |

@@ -3,7 +3,10 @@
 # Skript beendet ist (solange dort noch ein Prozess laeuft, wuerde Terminal
 # beim Schliessen nachfragen). Aufruf im Hintergrund aus dem Fenster heraus:
 #
-#   nohup thmvpn-closewindow.sh "$(tty)" </dev/null >/dev/null 2>&1 &
+#   nohup thmvpn-closewindow.sh "$(tty)" "$$" </dev/null >/dev/null 2>&1 &
+#
+# Das zweite Argument ist die PID des aufrufenden Skripts; auf deren Ende wird
+# gewartet, danach noch kurz auf das Ende der Shell im Fenster.
 #
 # Das osascript laeuft als Kindprozess von Terminal.app, steuert also Terminal
 # selbst - dafuer ist keine Automations-Freigabe noetig. Fenster mit mehreren
@@ -11,6 +14,9 @@
 #
 # Liegt nach der Installation in ~/.config/swiftbar/thmvpn-closewindow.sh
 
+if [ -n "$2" ]; then
+  while kill -0 "$2" 2>/dev/null; do sleep 0.2; done
+fi
 sleep 1
 /usr/bin/osascript \
   -e 'on run argv' \
