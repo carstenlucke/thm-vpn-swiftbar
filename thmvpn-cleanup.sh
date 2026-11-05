@@ -151,15 +151,16 @@ find_stale() {
 # das zurueck. Dienste, deren DNS-Server genau einer der alten Tunnel-
 # Nameserver ist, werden auf automatisch (Empty) zurueckgesetzt.
 reset_service_dns() {
-  local servers="$1" svc
+  local servers="$1" svc rc=0
   [ -n "$servers" ] || return 0
   while IFS= read -r svc; do
     /usr/sbin/networksetup -getdnsservers "$svc" 2>/dev/null \
       | /usr/bin/grep -qxF "$servers" || continue
     echo "    Setze DNS-Server von \"$svc\" zurueck"
-    /usr/sbin/networksetup -setdnsservers "$svc" Empty
+    /usr/sbin/networksetup -setdnsservers "$svc" Empty || rc=1
   done < <(/usr/sbin/networksetup -listallnetworkservices | /usr/bin/tail -n +2 \
              | /usr/bin/sed 's/^\*//')
+  return "$rc"
 }
 
 # Liegt ein Gateway direkt im lokalen Netz eines physischen Interfaces?
@@ -192,8 +193,9 @@ restore_default_route() {
   return 1
 }
 
+# Rueckgabe 1, wenn ein Schritt gescheitert ist.
 cleanup() {
-  local kind what n=0 default
+  local kind what n=0 failed=0 default
   if vpn_active; then
     echo "==> VPN ist noch aktiv - nichts angefasst."
     return
@@ -205,9 +207,14 @@ cleanup() {
   while read -r kind what; do
     [[ "$what" =~ ^utun[0-9]+$ ]] || continue
     echo "    Entferne DNS-Eintrag von $what"
-    reset_service_dns "$(sc_array "State:/Network/Service/$what/DNS" ServerAddresses)"
-    printf 'remove State:/Network/Service/%s/IPv4\nremove State:/Network/Service/%s/DNS\n' \
-      "$what" "$what" | /usr/sbin/scutil && n=$((n + 1))
+    reset_service_dns "$(sc_array "State:/Network/Service/$what/DNS" ServerAddresses)" \
+      || failed=$((failed + 1))
+    if printf 'remove State:/Network/Service/%s/IPv4\nremove State:/Network/Service/%s/DNS\n' \
+         "$what" "$what" | /usr/sbin/scutil; then
+      n=$((n + 1))
+    else
+      failed=$((failed + 1))
+    fi
   done < <(find_stale_dns)
   if [ "$n" -gt 0 ]; then
     /usr/bin/dscacheutil -flushcache
@@ -215,7 +222,11 @@ cleanup() {
   fi
   # Default-Route vor der Gateway-Aufloesung: ohne sie ist kein Nameserver erreichbar.
   if [ -n "$default" ]; then
-    restore_default_route "${default#default }" && n=$((n + 1))
+    if restore_default_route "${default#default }"; then
+      n=$((n + 1))
+    else
+      failed=$((failed + 1))
+    fi
   fi
   for what in $(stale_vpnc_files); do
     echo "    Entferne $what"
@@ -234,8 +245,16 @@ cleanup() {
   while read -r kind what; do
     [[ "$what" =~ ^[0-9]+(\.[0-9]+){3}$ ]] || continue
     echo "    Entferne Host-Route zu $what"
-    /sbin/route -n delete -host "$what" >/dev/null && n=$((n + 1))
+    if /sbin/route -n delete -host "$what" >/dev/null; then
+      n=$((n + 1))
+    else
+      failed=$((failed + 1))
+    fi
   done < <(find_stale_routes)
+  if [ "$failed" -gt 0 ]; then
+    echo "==> $n Altlast(en) entfernt, $failed Schritt(e) fehlgeschlagen."
+    return 1
+  fi
   echo "==> $n Altlast(en) entfernt."
 }
 
@@ -266,37 +285,27 @@ fi
 # (z.B. aus SwiftBar) in einem Terminal-Fenster neu starten.
 if /usr/bin/grep -qsE '^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+pam_tid' \
      /etc/pam.d/sudo_local /etc/pam.d/sudo; then
-  OWN_WINDOW_MARKER="${TMPDIR:-/tmp}/thmvpn-own-window.$(basename "$0")"
-  if [ ! -t 0 ]; then
-    /usr/bin/touch "$OWN_WINDOW_MARKER"
-    exec /usr/bin/open -a Terminal "$0"
-  fi
-  OWN_WINDOW=0
-  # Nur ein frischer Marker zaehlt: ein liegengebliebener (open gescheitert)
-  # darf kein von Hand geoeffnetes Fenster schliessen.
-  [ -n "$(/usr/bin/find "$OWN_WINDOW_MARKER" -mtime -60s 2>/dev/null)" ] && OWN_WINDOW=1
-  /bin/rm -f "$OWN_WINDOW_MARKER"
+  . "$(dirname "$0")/thmvpn-closewindow.sh" || exit 1
+  relaunch_in_terminal
   echo "==> Raeume Reste der letzten VPN-Sitzung auf (sudo per Touch ID bestaetigen) ..."
   /usr/bin/sudo "$0" --as-root
   STATUS=$?
   /usr/bin/open -g "swiftbar://refreshplugin?name=thmvpn"
   # Das Ergebnis steht nur in diesem Fenster, daher kurz stehen lassen.
-  CLOSE_WINDOW="$(dirname "$0")/thmvpn-closewindow.sh"
-  if [ "$STATUS" -eq 0 ] && [ "$OWN_WINDOW" -eq 1 ] && [ -x "$CLOSE_WINDOW" ]; then
+  if close_own_window_if "$STATUS" 3; then
     echo "    Dieses Fenster schliesst sich gleich."
-    sleep 3
-    nohup "$CLOSE_WINDOW" "$(tty)" "$$" </dev/null >/dev/null 2>&1 &
-    disown
   else
     echo "    Dieses Fenster kann geschlossen werden."
   fi
   exit
 fi
 
-# Sonst: nativer Admin-Dialog (kein Fenster), Ergebnis als Mitteilung.
+# Sonst: nativer Admin-Dialog (kein Fenster), Ergebnis als Mitteilung. "|| true"
+# haelt den Exit-Code von --as-root fern, sonst waere ein gescheitertes Aufraeumen
+# nicht von einem abgebrochenen Dialog zu unterscheiden; die letzte Zeile nennt es.
 RESULT=$(/usr/bin/osascript \
   -e 'on run argv' \
-  -e 'do shell script quoted form of (item 1 of argv) & " --as-root" with administrator privileges' \
+  -e 'do shell script quoted form of (item 1 of argv) & " --as-root || true" with administrator privileges' \
   -e 'end run' "$0") || exit 1   # Dialog abgebrochen
 RESULT=$(echo "$RESULT" | /usr/bin/tr '\r' '\n' | /usr/bin/tail -n 1)
 /usr/bin/osascript -e 'on run argv' \

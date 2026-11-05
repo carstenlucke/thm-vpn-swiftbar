@@ -13,18 +13,8 @@
 # Liegt nach der Installation in ~/.config/swiftbar/thmvpn-connect.sh
 
 # Ohne Terminal gestartet (z.B. von SwiftBar)? -> in einem Terminal neu starten.
-# Die Markerdatei merkt sich, dass das Fenster nur fuer dieses Skript geoeffnet
-# wurde und am Ende wieder geschlossen werden darf.
-OWN_WINDOW_MARKER="${TMPDIR:-/tmp}/thmvpn-own-window.$(basename "$0")"
-if [ ! -t 0 ]; then
-  /usr/bin/touch "$OWN_WINDOW_MARKER"
-  exec /usr/bin/open -a Terminal "$0"
-fi
-OWN_WINDOW=0
-# Nur ein frischer Marker zaehlt: ein liegengebliebener (open gescheitert)
-# darf kein von Hand geoeffnetes Fenster schliessen.
-[ -n "$(/usr/bin/find "$OWN_WINDOW_MARKER" -mtime -60s 2>/dev/null)" ] && OWN_WINDOW=1
-/bin/rm -f "$OWN_WINDOW_MARKER"
+. "$(dirname "$0")/thmvpn-closewindow.sh" || exit 1
+relaunch_in_terminal
 
 CONF="$HOME/.config/swiftbar/thmvpn.conf"
 [ -f "$CONF" ] && . "$CONF"
@@ -55,11 +45,8 @@ STATUS=$?
 echo
 # Nach sauberem Trennen raeumt sich das eigene Fenster selbst weg; bei einem
 # Fehler bleibt es offen, damit die Meldung lesbar ist.
-CLOSE_WINDOW="$(dirname "$0")/thmvpn-closewindow.sh"
-if [ "$STATUS" -eq 0 ] && [ "$OWN_WINDOW" -eq 1 ] && [ -x "$CLOSE_WINDOW" ]; then
+if close_own_window_if "$STATUS"; then
   echo "==> openconnect beendet. Dieses Fenster schliesst sich."
-  nohup "$CLOSE_WINDOW" "$(tty)" "$$" </dev/null >/dev/null 2>&1 &
-  disown
 else
   echo "==> openconnect beendet (Status $STATUS). Dieses Fenster kann geschlossen werden."
 fi

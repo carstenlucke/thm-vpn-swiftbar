@@ -245,9 +245,10 @@ erledigen. SwiftBar startet das Skript im Hintergrund; erkennt es, dass es ohne 
 (`[ ! -t 0 ]`), startet es sich per `open -a Terminal` selbst in einem Fenster neu und ruft dort
 `openconnect` mit den Werten aus `thmvpn.conf` auf. Das ist robuster als SwiftBars `terminal=true`,
 das eine Automations-Freigabe für Terminal.app benötigen würde. Endet `openconnect` sauber, schließt
-sich das Fenster selbst (`thmvpn-closewindow.sh`); bei einem Fehler bleibt es offen, damit die Meldung
-lesbar ist. Ein von Hand im eigenen Terminal gestartetes Skript und Fenster mit mehreren Tabs bleiben
-ebenfalls offen.
+sich das Fenster selbst (`thmvpn-closewindow.sh`), sobald darin kein Prozess mehr läuft; bei einem
+Fehler bleibt es offen, damit die Meldung lesbar ist. Ein von Hand im eigenen Terminal gestartetes
+Skript und Fenster mit mehreren Tabs bleiben ebenfalls offen. Ist im Terminal-Profil unter „Shell“
+das Nachfragen vor dem Schließen auf „Immer“ gestellt, kann Terminal trotzdem eine Rückfrage zeigen.
 
 **Trennen-Knopf** (`thmvpn-disconnect.sh`): `openconnect` läuft als `root` (per `sudo` gestartet),
 ein SwiftBar-Plugin dagegen als normaler Benutzer und darf den Prozess nicht beenden. Der Helfer
@@ -314,7 +315,7 @@ sudo rm -f /etc/pam.d/sudo_local                   # nur falls ausschließlich f
 | `plugins/thmvpn.10s.sh` | SwiftBar-Plugin: zeigt Status + Verbinden-/Trennen-Knopf, Refresh alle 10 s |
 | `thmvpn-connect.sh`     | Helfer: startet openconnect in einem Terminal (liest `thmvpn.conf`) |
 | `thmvpn-disconnect.sh`  | Helfer: beendet openconnect sauber (per Admin-Dialog) |
-| `thmvpn-closewindow.sh` | Helfer: schließt das selbst geöffnete Terminal-Fenster nach erfolgreichem Ende (verbinden, trennen, aufräumen) |
+| `thmvpn-closewindow.sh` | Helfer: startet die Skripte im Terminal und schließt das selbst geöffnete Fenster nach erfolgreichem Ende (verbinden, trennen, aufräumen) |
 | `thmvpn-cleanup.sh`     | Helfer: Health-Check und Aufräumen von Resten abgebrochener Sitzungen (Routen, DNS) |
 | `thmvpn.conf.example`   | Vorlage für die Konfiguration (RZ-Kennung, Gateway, Gruppe) |
 | `install.sh`            | Einrichtung in einem Schritt |
