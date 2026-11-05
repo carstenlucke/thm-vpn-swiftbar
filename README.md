@@ -117,10 +117,12 @@ mkdir -p ~/.config/swiftbar/plugins
 cp plugins/thmvpn.10s.sh   ~/.config/swiftbar/plugins/
 cp thmvpn-disconnect.sh    ~/.config/swiftbar/
 cp thmvpn-connect.sh       ~/.config/swiftbar/
+cp thmvpn-closewindow.sh   ~/.config/swiftbar/
 cp thmvpn-cleanup.sh       ~/.config/swiftbar/
 chmod +x ~/.config/swiftbar/plugins/thmvpn.10s.sh \
          ~/.config/swiftbar/thmvpn-disconnect.sh \
          ~/.config/swiftbar/thmvpn-connect.sh \
+         ~/.config/swiftbar/thmvpn-closewindow.sh \
          ~/.config/swiftbar/thmvpn-cleanup.sh
 
 # Konfig-Vorlage anlegen (RZ-Kennung dort eintragen)
@@ -297,6 +299,7 @@ sudo chmod 440 /etc/sudoers.d/openconnect-disconnect
 rm -f ~/.config/swiftbar/plugins/thmvpn.10s.sh \
       ~/.config/swiftbar/thmvpn-disconnect.sh \
       ~/.config/swiftbar/thmvpn-connect.sh \
+      ~/.config/swiftbar/thmvpn-closewindow.sh \
       ~/.config/swiftbar/thmvpn-cleanup.sh \
       ~/.config/swiftbar/thmvpn.conf
 # optional:
