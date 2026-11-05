@@ -266,13 +266,30 @@ fi
 # (z.B. aus SwiftBar) in einem Terminal-Fenster neu starten.
 if /usr/bin/grep -qsE '^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+pam_tid' \
      /etc/pam.d/sudo_local /etc/pam.d/sudo; then
+  OWN_WINDOW_MARKER="${TMPDIR:-/tmp}/thmvpn-own-window"
   if [ ! -t 0 ]; then
+    /usr/bin/touch "$OWN_WINDOW_MARKER"
     exec /usr/bin/open -a Terminal "$0"
+  fi
+  OWN_WINDOW=0
+  if [ -f "$OWN_WINDOW_MARKER" ]; then
+    /bin/rm -f "$OWN_WINDOW_MARKER"
+    OWN_WINDOW=1
   fi
   echo "==> Raeume Reste der letzten VPN-Sitzung auf (sudo per Touch ID bestaetigen) ..."
   /usr/bin/sudo "$0" --as-root
+  STATUS=$?
   /usr/bin/open -g "swiftbar://refreshplugin?name=thmvpn"
-  echo "    Dieses Fenster kann geschlossen werden."
+  # Das Ergebnis steht nur in diesem Fenster, daher kurz stehen lassen.
+  CLOSE_WINDOW="$(dirname "$0")/thmvpn-closewindow.sh"
+  if [ "$STATUS" -eq 0 ] && [ "$OWN_WINDOW" -eq 1 ] && [ -x "$CLOSE_WINDOW" ]; then
+    echo "    Dieses Fenster schliesst sich gleich."
+    sleep 3
+    nohup "$CLOSE_WINDOW" "$(tty)" </dev/null >/dev/null 2>&1 &
+    disown
+  else
+    echo "    Dieses Fenster kann geschlossen werden."
+  fi
   exit
 fi
 

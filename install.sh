@@ -25,9 +25,11 @@ mkdir -p "$PLUGIN_DIR"
 cp "$REPO_DIR/plugins/thmvpn.10s.sh" "$PLUGIN_DIR/thmvpn.10s.sh"
 cp "$REPO_DIR/thmvpn-disconnect.sh" "$SWIFTBAR_DIR/thmvpn-disconnect.sh"
 cp "$REPO_DIR/thmvpn-connect.sh"    "$SWIFTBAR_DIR/thmvpn-connect.sh"
+cp "$REPO_DIR/thmvpn-closewindow.sh" "$SWIFTBAR_DIR/thmvpn-closewindow.sh"
 cp "$REPO_DIR/thmvpn-cleanup.sh"    "$SWIFTBAR_DIR/thmvpn-cleanup.sh"
 chmod +x "$PLUGIN_DIR/thmvpn.10s.sh" "$SWIFTBAR_DIR/thmvpn-disconnect.sh" \
-         "$SWIFTBAR_DIR/thmvpn-connect.sh" "$SWIFTBAR_DIR/thmvpn-cleanup.sh"
+         "$SWIFTBAR_DIR/thmvpn-connect.sh" "$SWIFTBAR_DIR/thmvpn-cleanup.sh" \
+         "$SWIFTBAR_DIR/thmvpn-closewindow.sh"
 
 # Config-Vorlage anlegen, vorhandene Konfiguration nicht ueberschreiben
 if [ ! -f "$SWIFTBAR_DIR/thmvpn.conf" ]; then
